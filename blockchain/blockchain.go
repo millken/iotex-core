@@ -8,6 +8,7 @@ package blockchain
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -579,6 +580,9 @@ func (bc *blockchain) startExistingBlockchain(ctx context.Context) error {
 		blk, err := bc.dao.GetBlockByHeight(i)
 		if err != nil {
 			return err
+		}
+		if (blk.Height() % 100) == 0 {
+			fmt.Println(blk.Height())
 		}
 		candidateCtx := protocol.WithBlockchainCtx(
 			context.Background(),

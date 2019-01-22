@@ -37,7 +37,6 @@ type (
 		SelfState() *state.Account
 		Commit() error
 		RootHash() hash.Hash256
-		LoadRoot() error
 		Iterator() (trie.Iterator, error)
 		Snapshot() Contract
 	}
@@ -85,8 +84,13 @@ func (c *contract) SetState(key hash.Hash256, value []byte) error {
 	}
 	c.dirtyState = true
 	err := c.trie.Upsert(key[:], value)
-	// TODO (zhi): confirm whether we should update the root on err
-	c.Account.Root = hash.BytesToHash256(c.trie.RootHash())
+	if err == nil {
+		newRootHash, err := c.trie.Commit()
+		if err == nil {
+			// TODO (zhi): confirm whether we should update the root on err
+			c.Account.Root = hash.BytesToHash256(newRootHash)
+		}
+	}
 	return err
 }
 
@@ -119,7 +123,11 @@ func (c *contract) SelfState() *state.Account {
 func (c *contract) Commit() error {
 	if c.dirtyState {
 		// record the new root hash, global account trie will Commit all pending writes to DB
-		c.Account.Root = hash.BytesToHash256(c.trie.RootHash())
+		rh, err := c.trie.Commit()
+		if err != nil {
+			return err
+		}
+		c.Account.Root = hash.BytesToHash256(rh)
 		c.dirtyState = false
 		// purge the committed value cache
 		c.committed = nil
@@ -154,9 +162,7 @@ func (c *contract) Snapshot() Contract {
 		root:       c.Account.Root,
 		committed:  c.committed,
 		sm:         c.sm,
-		// note we simply save the trie (which is an interface/pointer)
-		// later Revert() call needs to reset the saved trie root
-		trie: c.trie,
+		trie:       c.trie.Clone(),
 	}
 }
 

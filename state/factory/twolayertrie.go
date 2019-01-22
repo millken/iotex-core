@@ -47,6 +47,11 @@ func (tlt *TwoLayerTrie) RootHash() []byte {
 	return tlt.layerOne.RootHash()
 }
 
+// Commit commits the layer one trie
+func (tlt *TwoLayerTrie) Commit() ([]byte, error) {
+	return tlt.layerOne.Commit()
+}
+
 // SetRootHash sets root hash for layer one trie
 func (tlt *TwoLayerTrie) SetRootHash(rh []byte) error {
 	return tlt.layerOne.SetRootHash(rh)
@@ -81,7 +86,12 @@ func (tlt *TwoLayerTrie) Upsert(layerOneKey []byte, layerTwoKey []byte, value []
 		return err
 	}
 
-	return tlt.layerOne.Upsert(layerOneKey, layerTwo.RootHash())
+	layerTwoRootHash, err := layerTwo.Commit()
+	if err != nil {
+		return err
+	}
+
+	return tlt.layerOne.Upsert(layerOneKey, layerTwoRootHash)
 }
 
 // Delete deletes an item in layer two
@@ -100,7 +110,11 @@ func (tlt *TwoLayerTrie) Delete(layerOneKey []byte, layerTwoKey []byte) error {
 	}
 
 	if !layerTwo.IsEmpty() {
-		return tlt.layerOne.Upsert(layerOneKey, layerTwo.RootHash())
+		layerTwoRootHash, err := layerTwo.Commit()
+		if err != nil {
+			return err
+		}
+		return tlt.layerOne.Upsert(layerOneKey, layerTwoRootHash)
 	}
 
 	return tlt.layerOne.Delete(layerOneKey)

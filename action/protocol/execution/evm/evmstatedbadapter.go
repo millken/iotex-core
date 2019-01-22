@@ -362,12 +362,6 @@ func (stateDB *StateDBAdapter) RevertToSnapshot(snapshot int) {
 	// restore modified contracts
 	stateDB.cachedContract = nil
 	stateDB.cachedContract = stateDB.contractSnapshot[snapshot]
-	for addr, c := range stateDB.cachedContract {
-		if err := c.LoadRoot(); err != nil {
-			log.L().Error("Failed to load root for contract.", zap.Error(err), log.Hex("addrHash", addr[:]))
-			return
-		}
-	}
 	// restore preimages
 	stateDB.preimages = nil
 	stateDB.preimages = stateDB.preimageSnapshot[snapshot]

@@ -11,18 +11,18 @@ import "github.com/iotexproject/iotex-address/address"
 type (
 	// CandidateCenter is a struct to manage the candidates
 	CandidateCenter struct {
-		nameMap          map[string]*Candidate
-		ownerMap         map[string]*Candidate
-		operatorMap      map[string]*Candidate
+		nameMap     map[string]*Candidate
+		ownerMap    map[string]*Candidate
+		operatorMap map[string]*Candidate
 	}
 )
 
 // NewCandidateCenter creates an instance of CandidateCenter
 func NewCandidateCenter() *CandidateCenter {
 	return &CandidateCenter{
-		nameMap:          make(map[string]*Candidate),
-		ownerMap:         make(map[string]*Candidate),
-		operatorMap:      make(map[string]*Candidate),
+		nameMap:     make(map[string]*Candidate),
+		ownerMap:    make(map[string]*Candidate),
+		operatorMap: make(map[string]*Candidate),
 	}
 }
 
