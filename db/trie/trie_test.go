@@ -77,7 +77,8 @@ func Test2Roots(t *testing.T) {
 	v, err = tr.Get(egg)
 	require.NoError(err)
 	require.Equal(testV[4], v)
-	root := tr.RootHash()
+	root, err := tr.Commit()
+	require.NoError(err)
 	require.NoError(tr.Stop(context.Background()))
 
 	// second trie
@@ -96,7 +97,9 @@ func Test2Roots(t *testing.T) {
 	v, err = tr1.Get(fox)
 	require.NoError(err)
 	require.Equal(testV[5], v)
-	root1 := tr1.RootHash()
+
+	root1, err := tr1.Commit()
+	require.NoError(err)
 	require.NotEqual(root, root1)
 	require.NoError(tr1.Stop(context.Background()))
 
@@ -141,9 +144,9 @@ func TestInsert(t *testing.T) {
 	require := require.New(t)
 
 	tr, err := NewTrie(KVStoreOption(newInMemKVStore()), KeyLengthOption(8))
-	require.NotNil(tr)
 	require.NoError(err)
-	require.NoError(tr.Start(context.Background()))
+	require.NotNil(tr)
+	require.Nil(tr.Start(context.Background()))
 	// this adds one L to root R
 	t.Log("Put[cat]")
 	require.NoError(tr.Upsert(cat, testV[2]))
@@ -397,7 +400,8 @@ func TestBatchCommit(t *testing.T) {
 	require.NoError(tr.Upsert(fox, testV[5]))
 	v, _ = tr.Get(fox)
 	require.Equal(testV[5], v)
-	root := tr.RootHash()
+	root, err := tr.Commit()
+	require.NoError(err)
 	// commit and reopen
 	require.NoError(tr.Stop(context.Background()))
 	tr, err = NewTrie(KVStoreOption(trieDB), RootHashOption(root), KeyLengthOption(8))
