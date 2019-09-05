@@ -1,10 +1,13 @@
 package protocol
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/iotexproject/go-pkgs/hash"
+
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/state"
-	"github.com/pkg/errors"
+	"github.com/iotexproject/iotex-core/state/tracker"
 )
 
 // NamespaceOption creates an option for given namesapce
@@ -96,5 +99,7 @@ type (
 		// General state
 		PutState(interface{}, ...StateOption) (uint64, error)
 		DelState(...StateOption) (uint64, error)
+		// Track state
+		Track(tracker.StateChange)
 	}
 )
