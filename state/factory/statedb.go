@@ -26,6 +26,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/actpool"
 	"github.com/iotexproject/iotex-core/blockchain/block"
+	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/db/batch"
@@ -49,6 +50,7 @@ type stateDB struct {
 	protocolView             protocol.View
 	skipBlockValidationOnPut bool
 	store                    asql.Store
+	genesis                  genesis.Genesis
 }
 
 // StateDBOption sets stateDB construction parameter
@@ -85,6 +87,7 @@ func DefaultStateDBOption() StateDBOption {
 			dbName = "analytics"
 		}
 		sdb.store = asql.NewMySQL(connectionStr, dbName)
+		sdb.genesis = cfg.Genesis
 		return nil
 	}
 }
@@ -145,6 +148,12 @@ func NewStateDB(cfg config.Config, opts ...StateDBOption) (Factory, error) {
 
 func (sdb *stateDB) Start(ctx context.Context) error {
 	ctx = protocol.WithRegistry(ctx, sdb.registry)
+	if err := sdb.store.Start(ctx); err != nil {
+		return errors.Wrap(err, "failed to start state tracker store")
+	}
+	if err := tracker.InitStore(sdb.genesis, sdb.store); err != nil {
+		return errors.Wrap(err, "failed to init state tracker store")
+	}
 	if err := sdb.dao.Start(ctx); err != nil {
 		return err
 	}
@@ -180,12 +189,7 @@ func (sdb *stateDB) Start(ctx context.Context) error {
 	default:
 		return err
 	}
-
 	return nil
-	if err := sdb.store.Start(ctx); err != nil {
-		return errors.Wrap(err, "failed to start state tracker store")
-	}
-	return tracker.InitStore(sdb.store)
 }
 
 func (sdb *stateDB) Stop(ctx context.Context) error {
@@ -215,11 +219,12 @@ func (sdb *stateDB) newWorkingSet(ctx context.Context, height uint64) (*workingS
 		return nil, err
 	}
 
+	t := tracker.New(sdb.store, sdb.genesis)
 	return &workingSet{
 		height:    height,
 		finalized: false,
 		dock:      protocol.NewDock(),
-		st:        tracker.New(sdb.store),
+		st:        t,
 		getStateFunc: func(ns string, key []byte, s interface{}) error {
 			data, err := flusher.KVStoreWithBuffer().Get(ns, key)
 			if err != nil {
@@ -264,7 +269,7 @@ func (sdb *stateDB) newWorkingSet(ctx context.Context, height uint64) (*workingS
 				return err
 			}
 			sdb.currentChainHeight = h
-			return nil
+			return t.Commit(h)
 		},
 		readviewFunc: func(name string) (uint64, interface{}, error) {
 			return sdb.ReadView(name)
