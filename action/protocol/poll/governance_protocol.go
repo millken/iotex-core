@@ -367,7 +367,7 @@ func (p *governanceChainCommitteeProtocol) ReadState(
 			epochStartHeight = rp.GetEpochHeight(epochNum)
 		}
 		if p.indexer != nil {
-			kickoutList, err := p.indexer.GetKickoutList(epochStartHeight)
+			kickoutList, err := p.indexer.KickoutList(epochStartHeight)
 			if err == nil {
 				return kickoutList.Serialize()
 			}
@@ -428,7 +428,7 @@ func (p *governanceChainCommitteeProtocol) readCandidatesByHeight(ctx context.Co
 func (p *governanceChainCommitteeProtocol) readCandidatesFromIndexer(ctx context.Context, epochStartHeight uint64) (state.CandidateList, error) {
 	bcCtx := protocol.MustGetBlockchainCtx(ctx)
 	hu := config.NewHeightUpgrade(&bcCtx.Genesis)
-	candidates, err := p.indexer.GetCandidate(epochStartHeight)
+	candidates, err := p.indexer.CandidateList(epochStartHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (p *governanceChainCommitteeProtocol) readCandidatesFromIndexer(ctx context
 		return candidates, nil
 	}
 	// After Easter height, kick-out unqualified delegates based on productivity
-	kickoutList, err := p.indexer.GetKickoutList(epochStartHeight)
+	kickoutList, err := p.indexer.KickoutList(epochStartHeight)
 	if err != nil {
 		return nil, err
 	}
