@@ -398,6 +398,7 @@ func (dao *blockDAO) getBlockHash(height uint64) (hash.Hash256, error) {
 		return h, errors.Wrapf(err, "blockhash is broken with length = %d", len(value))
 	}
 	copy(h[:], value)
+	fmt.Println("get block hash at height", height)
 	return h, nil
 }
 
@@ -652,6 +653,7 @@ func (dao *blockDAO) putBlock(blk *block.Block) error {
 	heightValue := byteutil.Uint64ToBytes(blkHeight)
 	hashKey := hashKey(hash)
 	b.Put(blockHashHeightMappingNS, hashKey, heightValue, "failed to put hash -> height mapping")
+	fmt.Println("put into blockdao at height", blkHeight)
 	heightKey := heightKey(blkHeight)
 	b.Put(blockHashHeightMappingNS, heightKey, hash[:], "failed to put height -> hash mapping")
 	tipHeight, err := dao.kvStore.Get(blockNS, topHeightKey)

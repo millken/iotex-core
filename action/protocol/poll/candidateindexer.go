@@ -8,6 +8,7 @@ package poll
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -62,6 +63,7 @@ func (cd *CandidateIndexer) PutCandidateList(height uint64, candidates *state.Ca
 	if err != nil {
 		return err
 	}
+	fmt.Println("put candidate list into indexer")
 	return cd.kvStore.Put(CandidateNamespace, byteutil.Uint64ToBytes(height), candidatesByte)
 }
 
@@ -73,6 +75,7 @@ func (cd *CandidateIndexer) PutKickoutList(height uint64, kickoutList *vote.Blac
 	if err != nil {
 		return err
 	}
+	fmt.Println("put kickout list into indexer")
 	return cd.kvStore.Put(KickoutNamespace, byteutil.Uint64ToBytes(height), kickoutListByte)
 }
 
@@ -91,6 +94,7 @@ func (cd *CandidateIndexer) CandidateList(height uint64) (state.CandidateList, e
 	if err := candidates.Deserialize(bytes); err != nil {
 		return nil, err
 	}
+	fmt.Println("get candidate list into indexer")
 	return *candidates, nil
 }
 
@@ -106,6 +110,7 @@ func (cd *CandidateIndexer) KickoutList(height uint64) (*vote.Blacklist, error) 
 		}
 		return nil, err
 	}
+	fmt.Println("get kickout list into indexer")
 	if err := bl.Deserialize(bytes); err != nil {
 		return nil, err
 	}
