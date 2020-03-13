@@ -8,13 +8,14 @@ package poll
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/iotexproject/iotex-core/action/protocol/vote"
 	"github.com/iotexproject/iotex-core/db"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -63,7 +64,7 @@ func (cd *CandidateIndexer) PutCandidateList(height uint64, candidates *state.Ca
 	if err != nil {
 		return err
 	}
-	fmt.Println("put candidate list into indexer")
+	log.L().Info("put candidatelist into candidate indexer", zap.Uint64("height", height))
 	return cd.kvStore.Put(CandidateNamespace, byteutil.Uint64ToBytes(height), candidatesByte)
 }
 
@@ -75,7 +76,7 @@ func (cd *CandidateIndexer) PutKickoutList(height uint64, kickoutList *vote.Blac
 	if err != nil {
 		return err
 	}
-	fmt.Println("put kickout list into indexer")
+	log.L().Info("put kickout list into candidate indexer", zap.Uint64("height", height))
 	return cd.kvStore.Put(KickoutNamespace, byteutil.Uint64ToBytes(height), kickoutListByte)
 }
 
@@ -83,6 +84,7 @@ func (cd *CandidateIndexer) PutKickoutList(height uint64, kickoutList *vote.Blac
 func (cd *CandidateIndexer) CandidateList(height uint64) (state.CandidateList, error) {
 	cd.mutex.RLock()
 	defer cd.mutex.RUnlock()
+	log.L().Info("get candidatelist from candidate indexer", zap.Uint64("height", height))
 	candidates := &state.CandidateList{}
 	bytes, err := cd.kvStore.Get(CandidateNamespace, byteutil.Uint64ToBytes(height))
 	if err != nil {
@@ -94,7 +96,6 @@ func (cd *CandidateIndexer) CandidateList(height uint64) (state.CandidateList, e
 	if err := candidates.Deserialize(bytes); err != nil {
 		return nil, err
 	}
-	fmt.Println("get candidate list into indexer")
 	return *candidates, nil
 }
 
@@ -102,6 +103,7 @@ func (cd *CandidateIndexer) CandidateList(height uint64) (state.CandidateList, e
 func (cd *CandidateIndexer) KickoutList(height uint64) (*vote.Blacklist, error) {
 	cd.mutex.RLock()
 	defer cd.mutex.RUnlock()
+	log.L().Info("get kickoutlist from candidate indexer", zap.Uint64("height", height))
 	bl := &vote.Blacklist{}
 	bytes, err := cd.kvStore.Get(KickoutNamespace, byteutil.Uint64ToBytes(height))
 	if err != nil {
@@ -110,7 +112,6 @@ func (cd *CandidateIndexer) KickoutList(height uint64) (*vote.Blacklist, error) 
 		}
 		return nil, err
 	}
-	fmt.Println("get kickout list into indexer")
 	if err := bl.Deserialize(bytes); err != nil {
 		return nil, err
 	}
