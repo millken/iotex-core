@@ -212,7 +212,7 @@ func New(
 	}
 
 	// create Blockchain
-	chain := blockchain.NewBlockchain(cfg, dao, sf, chainOpts...)
+	chain := blockchain.NewBlockchain(cfg, dao, sf, sf, chainOpts...)
 	if chain == nil {
 		panic("failed to create blockchain")
 	}

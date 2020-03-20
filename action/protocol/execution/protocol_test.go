@@ -310,6 +310,7 @@ func (sct *SmartContractTest) prepareBlockchain(
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(
 			sf,
@@ -490,6 +491,7 @@ func TestProtocol_Handle(t *testing.T) {
 		bc := blockchain.NewBlockchain(
 			cfg,
 			dao,
+			sf,
 			sf,
 			blockchain.RegistryOption(registry),
 			blockchain.BlockValidatorOption(block.NewValidator(

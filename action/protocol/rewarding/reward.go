@@ -79,11 +79,20 @@ func (p *Protocol) GrantBlockReward(
 
 	producerAddrStr := blkCtx.Producer.String()
 	rewardAddrStr := ""
-	for _, candidate := range bcCtx.Candidates {
-		if candidate.Address == producerAddrStr {
-			rewardAddrStr = candidate.RewardAddress
-			break
+	pp := poll.FindProtocol(bcCtx.Registry)
+	if pp != nil {
+		candidates, err := pp.Candidates(ctx, sm)
+		if err != nil {
+			return nil, err
 		}
+		for _, candidate := range candidates {
+			if candidate.Address == producerAddrStr {
+				rewardAddrStr = candidate.RewardAddress
+				break
+			}
+		}
+	} else {
+		rewardAddrStr = producerAddrStr
 	}
 	// If reward address doesn't exist, do nothing
 	if rewardAddrStr == "" {
@@ -167,7 +176,10 @@ func (p *Protocol) GrantEpochReward(
 			return nil, err
 		}
 	}
-	candidates := bcCtx.Candidates
+	candidates, err := poll.MustGetProtocol(bcCtx.Registry).Candidates(ctx, sm)
+	if err != nil {
+		return nil, err
+	}
 	addrs, amounts, err := p.splitEpochReward(epochStartHeight, sm, candidates, a.epochReward, a.numDelegatesForEpochReward, exemptAddrs, uqd)
 	if err != nil {
 		return nil, err

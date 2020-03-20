@@ -86,7 +86,7 @@ type (
 		GetActionByActionHash(hash.Hash256, uint64) (action.SealedEnvelope, error)
 		GetReceiptByActionHash(hash.Hash256, uint64) (*action.Receipt, error)
 		GetReceipts(uint64) ([]*action.Receipt, error)
-		PutBlock(*block.Block) error
+		PutBlock(context.Context, *block.Block) error
 		DeleteBlockToTarget(uint64) error
 		IndexFile(uint64, []byte) error
 		GetFileIndex(uint64) ([]byte, error)
@@ -100,7 +100,7 @@ type (
 		Start(ctx context.Context) error
 		Stop(ctx context.Context) error
 		TipHeight() (uint64, error)
-		PutBlock(blk *block.Block) error
+		PutBlock(context.Context, *block.Block) error
 		DeleteTipBlock(blk *block.Block) error
 	}
 
@@ -221,11 +221,13 @@ func (dao *blockDAO) checkIndexers() error {
 			return errors.New("indexer tip height cannot by higher than dao tip height")
 		}
 		for i := tipHeight; i < dao.tipHeight; i++ {
+			// prepare context
+			ctx := context.Background()
 			blk, err := dao.getBlockByHeight(i)
 			if err != nil {
 				return err
 			}
-			if err := indexer.PutBlock(blk); err != nil {
+			if err := indexer.PutBlock(ctx, blk); err != nil {
 				return err
 			}
 		}
@@ -325,7 +327,7 @@ func (dao *blockDAO) GetReceipts(blkHeight uint64) ([]*action.Receipt, error) {
 	return dao.getReceipts(blkHeight)
 }
 
-func (dao *blockDAO) PutBlock(blk *block.Block) error {
+func (dao *blockDAO) PutBlock(ctx context.Context, blk *block.Block) error {
 	err := func() error {
 		dao.mutex.Lock()
 		defer dao.mutex.Unlock()
@@ -340,7 +342,7 @@ func (dao *blockDAO) PutBlock(blk *block.Block) error {
 	}
 	// index the block if there's indexer
 	for _, indexer := range dao.indexers {
-		if err := indexer.PutBlock(blk); err != nil {
+		if err := indexer.PutBlock(ctx, blk); err != nil {
 			return err
 		}
 	}

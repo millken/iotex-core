@@ -427,6 +427,7 @@ func TestRollDPoSConsensus(t *testing.T) {
 				cfg,
 				nil,
 				sf,
+				sf,
 				blockchain.InMemDaoOption(),
 				blockchain.RegistryOption(registry),
 				blockchain.BlockValidatorOption(block.NewValidator(

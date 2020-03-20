@@ -277,8 +277,8 @@ func (sdb *stateDB) SimulateExecution(
 	return simulateExecution(ctx, ws, caller, ex, getBlockHash)
 }
 
-// Commit persists all changes in RunActions() into the DB
-func (sdb *stateDB) Commit(ctx context.Context, blk *block.Block) error {
+// PutBlock persists all changes in RunActions() into the DB
+func (sdb *stateDB) PutBlock(ctx context.Context, blk *block.Block) error {
 	sdb.mutex.Lock()
 	timer := sdb.timerFactory.NewTimer("Commit")
 	sdb.mutex.Unlock()

@@ -358,8 +358,8 @@ func TestProtocol_NoRewardAddr(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NoError(t, rp.Register(registry))
-	require.NoError(t, p.Register(registry))
 	require.NoError(t, pp.Register(registry))
+	require.NoError(t, p.Register(registry))
 
 	ge := config.Default.Genesis
 	ge.Rewarding.InitBalanceStr = "0"
@@ -394,9 +394,8 @@ func TestProtocol_NoRewardAddr(t *testing.T) {
 	ctx = protocol.WithBlockchainCtx(
 		ctx,
 		protocol.BlockchainCtx{
-			Genesis:    ge,
-			Candidates: abps,
-			Registry:   registry,
+			Genesis:  ge,
+			Registry: registry,
 		},
 	)
 

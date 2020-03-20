@@ -179,6 +179,7 @@ func makeChain(t *testing.T) (blockchain.Blockchain, factory.Factory, *rolldpos.
 		cfg,
 		nil,
 		sf,
+		sf,
 		blockchain.BoltDBDaoOption(),
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(

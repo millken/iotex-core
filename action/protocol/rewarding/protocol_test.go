@@ -10,20 +10,17 @@ import (
 	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/iotexproject/go-pkgs/hash"
-	"github.com/iotexproject/iotex-election/test/mock/mock_committee"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
-	"github.com/iotexproject/iotex-core/action/protocol/poll"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
@@ -32,6 +29,7 @@ import (
 	"github.com/iotexproject/iotex-core/state"
 	"github.com/iotexproject/iotex-core/test/identityset"
 	"github.com/iotexproject/iotex-core/test/mock/mock_chainmanager"
+	"github.com/iotexproject/iotex-core/test/mock/mock_poll"
 )
 
 func testProtocol(t *testing.T, test func(*testing.T, context.Context, protocol.StateManager, *Protocol), withExempt bool) {
@@ -146,33 +144,15 @@ func testProtocol(t *testing.T, test func(*testing.T, context.Context, protocol.
 			RewardAddress: identityset.Address(31).String(),
 		},
 	}
-	cfg := config.Default
-	committee := mock_committee.NewMockCommittee(ctrl)
-	pp, err := poll.NewGovernanceChainCommitteeProtocol(
-		nil,
-		func(protocol.StateReader, uint64) ([]*state.Candidate, error) {
-			return abps, nil
-		},
-		nil,
-		nil,
-		nil,
-		committee,
-		uint64(123456),
-		func(uint64) (time.Time, error) { return time.Now(), nil },
-		5,
-		5,
-		cfg.Chain.PollInitialCandidatesInterval,
-		sm,
-		nil,
-		cfg.Genesis.ProductivityThreshold,
-		cfg.Genesis.KickoutEpochPeriod,
-		cfg.Genesis.KickoutIntensityRate,
-		cfg.Genesis.UnproductiveDelegateMaxCacheSize,
-	)
-	require.NoError(t, err)
+	pp := mock_poll.NewMockProtocol(ctrl)
+	pp.EXPECT().Candidates(gomock.Any(), gomock.Any()).Return(candidates, nil).AnyTimes()
+	pp.EXPECT().Delegates(gomock.Any(), gomock.Any()).Return(abps, nil).AnyTimes()
+	pp.EXPECT().Register(gomock.Any()).DoAndReturn(func(reg *protocol.Registry) error {
+		return reg.Register("poll", pp)
+	}).AnyTimes()
 	require.NoError(t, rp.Register(registry))
-	require.NoError(t, p.Register(registry))
 	require.NoError(t, pp.Register(registry))
+	require.NoError(t, p.Register(registry))
 
 	ge := config.Default.Genesis
 	// Create a test account with 1000 token
@@ -202,8 +182,7 @@ func testProtocol(t *testing.T, test func(*testing.T, context.Context, protocol.
 	ctx = protocol.WithBlockchainCtx(
 		ctx,
 		protocol.BlockchainCtx{
-			Genesis:    ge,
-			Candidates: candidates,
+			Genesis: ge,
 		},
 	)
 	ap := account.NewProtocol(DepositGas)
@@ -227,9 +206,8 @@ func testProtocol(t *testing.T, test func(*testing.T, context.Context, protocol.
 	ctx = protocol.WithBlockchainCtx(
 		ctx,
 		protocol.BlockchainCtx{
-			Genesis:    ge,
-			Registry:   registry,
-			Candidates: candidates,
+			Genesis:  ge,
+			Registry: registry,
 		},
 	)
 	blockReward, err := p.BlockReward(ctx, sm)
@@ -333,14 +311,7 @@ func TestProtocol_Handle(t *testing.T) {
 	ctx = protocol.WithBlockchainCtx(
 		ctx,
 		protocol.BlockchainCtx{
-			Genesis: cfg.Genesis,
-			Candidates: []*state.Candidate{
-				{
-					Address:       identityset.Address(0).String(),
-					Votes:         unit.ConvertIotxToRau(4000000),
-					RewardAddress: identityset.Address(0).String(),
-				},
-			},
+			Genesis:  cfg.Genesis,
 			Registry: registry,
 		},
 	)

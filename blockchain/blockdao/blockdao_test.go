@@ -182,7 +182,7 @@ func TestBlockDAO(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			// test putBlock/Receipt
 			blks[i].Receipts = receipts[i]
-			require.NoError(dao.PutBlock(blks[i]))
+			require.NoError(dao.PutBlock(ctx, blks[i]))
 			blks[i].Receipts = nil
 
 			// test getBlock()
@@ -213,7 +213,7 @@ func TestBlockDAO(t *testing.T) {
 
 		// put blocks
 		for i := 0; i < 3; i++ {
-			require.NoError(dao.PutBlock(blks[i]))
+			require.NoError(dao.PutBlock(ctx, blks[i]))
 		}
 
 		// delete tip block one by one, verify address/action after each deletion
@@ -317,7 +317,7 @@ func BenchmarkBlockCache(b *testing.B) {
 				AddActions(actions...).
 				SignAndBuild(identityset.PrivateKey(0))
 			require.NoError(b, err)
-			err = blkDao.PutBlock(&blk)
+			err = blkDao.PutBlock(context.Background(), &blk)
 			require.NoError(b, err)
 			prevHash = blk.HashBlock()
 		}

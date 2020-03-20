@@ -231,17 +231,17 @@ func (mr *MockBlockDAOMockRecorder) GetReceipts(arg0 interface{}) *gomock.Call {
 }
 
 // PutBlock mocks base method
-func (m *MockBlockDAO) PutBlock(arg0 *block.Block) error {
+func (m *MockBlockDAO) PutBlock(arg0 context.Context, arg1 *block.Block) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutBlock", arg0)
+	ret := m.ctrl.Call(m, "PutBlock", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutBlock indicates an expected call of PutBlock
-func (mr *MockBlockDAOMockRecorder) PutBlock(arg0 interface{}) *gomock.Call {
+func (mr *MockBlockDAOMockRecorder) PutBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutBlock", reflect.TypeOf((*MockBlockDAO)(nil).PutBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutBlock", reflect.TypeOf((*MockBlockDAO)(nil).PutBlock), arg0, arg1)
 }
 
 // DeleteBlockToTarget mocks base method
@@ -398,17 +398,17 @@ func (mr *MockBlockIndexerMockRecorder) TipHeight() *gomock.Call {
 }
 
 // PutBlock mocks base method
-func (m *MockBlockIndexer) PutBlock(blk *block.Block) error {
+func (m *MockBlockIndexer) PutBlock(arg0 context.Context, arg1 *block.Block) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutBlock", blk)
+	ret := m.ctrl.Call(m, "PutBlock", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutBlock indicates an expected call of PutBlock
-func (mr *MockBlockIndexerMockRecorder) PutBlock(blk interface{}) *gomock.Call {
+func (mr *MockBlockIndexerMockRecorder) PutBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutBlock", reflect.TypeOf((*MockBlockIndexer)(nil).PutBlock), blk)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutBlock", reflect.TypeOf((*MockBlockIndexer)(nil).PutBlock), arg0, arg1)
 }
 
 // DeleteTipBlock mocks base method

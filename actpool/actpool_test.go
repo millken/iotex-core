@@ -69,7 +69,7 @@ func TestActPool_NewActPool(t *testing.T) {
 
 	// all good
 	opt := EnableExperimentalActions()
-	require.Panics(func() { blockchain.NewBlockchain(cfg, nil, nil, nil) }, "option is nil")
+	require.Panics(func() { blockchain.NewBlockchain(cfg, nil, nil, nil, nil) }, "option is nil")
 	sf, err := factory.NewStateDB(cfg, factory.DefaultStateDBOption())
 	require.NoError(err)
 	act, err := NewActPool(sf, cfg.ActPool, opt)
@@ -140,6 +140,7 @@ func TestActPool_AddActs(t *testing.T) {
 	bc := blockchain.NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		blockchain.RegistryOption(registry),
 	)
@@ -310,6 +311,7 @@ func TestActPool_PickActs(t *testing.T) {
 			cfgDefault,
 			dao,
 			sf,
+			sf,
 			blockchain.RegistryOption(registry),
 		)
 		require.NoError(bc.Start(context.Background()))
@@ -389,6 +391,7 @@ func TestActPool_removeConfirmedActs(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 	)
 	acc := account.NewProtocol(rewarding.DepositGas)
@@ -439,7 +442,7 @@ func TestActPool_removeConfirmedActs(t *testing.T) {
 		SignAndBuild(identityset.PrivateKey(27))
 	require.NoError(err)
 
-	require.NoError(sf.Commit(ctx, &blk))
+	require.NoError(sf.PutBlock(ctx, &blk))
 	ap.removeConfirmedActs()
 	require.Equal(0, len(ap.allActions))
 	require.Nil(ap.accountActs[addr1])
@@ -460,6 +463,7 @@ func TestActPool_Reset(t *testing.T) {
 	bc := blockchain.NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		blockchain.RegistryOption(registry),
 	)
@@ -591,7 +595,7 @@ func TestActPool_Reset(t *testing.T) {
 		SignAndBuild(identityset.PrivateKey(27))
 	require.NoError(err)
 
-	require.NoError(sf.Commit(ctx, &blk))
+	require.NoError(sf.PutBlock(ctx, &blk))
 	//Reset
 	ap1.Reset()
 	ap2.Reset()
@@ -701,7 +705,7 @@ func TestActPool_Reset(t *testing.T) {
 		SignAndBuild(identityset.PrivateKey(27))
 	require.NoError(err)
 
-	require.NoError(sf.Commit(ctx, &blk))
+	require.NoError(sf.PutBlock(ctx, &blk))
 	//Reset
 	ap1.Reset()
 	ap2.Reset()
@@ -803,7 +807,7 @@ func TestActPool_Reset(t *testing.T) {
 		AddActions(actionMap2Slice(pickedActs)...).
 		SignAndBuild(identityset.PrivateKey(27))
 	require.NoError(err)
-	require.NoError(sf.Commit(ctx, &blk))
+	require.NoError(sf.PutBlock(ctx, &blk))
 	//Reset
 	ap1.Reset()
 	// Check confirmed nonce, pending nonce, and pending balance after resetting actpool for each account
@@ -831,6 +835,7 @@ func TestActPool_removeInvalidActs(t *testing.T) {
 	bc := blockchain.NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		blockchain.RegistryOption(registry),
 	)
@@ -885,6 +890,7 @@ func TestActPool_GetPendingNonce(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 	)
 	acc := account.NewProtocol(rewarding.DepositGas)
@@ -934,6 +940,7 @@ func TestActPool_GetUnconfirmedActs(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 	)
 	acc := account.NewProtocol(rewarding.DepositGas)
@@ -982,6 +989,7 @@ func TestActPool_GetActionByHash(t *testing.T) {
 	bc := blockchain.NewBlockchain(
 		cfg,
 		nil,
+		sf,
 		sf,
 		blockchain.InMemDaoOption(),
 	)
@@ -1041,6 +1049,7 @@ func TestActPool_GetSize(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(re),
 	)
 	acc := account.NewProtocol(rewarding.DepositGas)
@@ -1092,7 +1101,7 @@ func TestActPool_GetSize(t *testing.T) {
 		SignAndBuild(identityset.PrivateKey(27))
 	require.NoError(err)
 
-	require.NoError(sf.Commit(ctx, &blk))
+	require.NoError(sf.PutBlock(ctx, &blk))
 	ap.removeConfirmedActs()
 	require.Equal(uint64(0), ap.GetSize())
 	require.Equal(uint64(0), ap.GetGasSize())
@@ -1107,6 +1116,7 @@ func TestActPool_AddActionNotEnoughGasPrice(t *testing.T) {
 	bc := blockchain.NewBlockchain(
 		config.Default,
 		nil,
+		sf,
 		sf,
 		blockchain.InMemDaoOption(),
 	)

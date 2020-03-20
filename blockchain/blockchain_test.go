@@ -417,6 +417,7 @@ func TestCreateBlockchain(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		RegistryOption(registry),
 		BlockValidatorOption(block.NewValidator(
 			sf,
@@ -458,6 +459,7 @@ func TestBlockchain_MintNewBlock(t *testing.T) {
 	bc := NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		RegistryOption(registry),
 		BlockValidatorOption(block.NewValidator(
@@ -532,6 +534,7 @@ func TestBlockchain_MintNewBlock_PopAccount(t *testing.T) {
 	bc := NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		RegistryOption(registry),
 		BlockValidatorOption(block.NewValidator(
@@ -636,6 +639,7 @@ func TestConstantinople(t *testing.T) {
 		bc := NewBlockchain(
 			cfg,
 			dao,
+			sf,
 			sf,
 			RegistryOption(registry),
 			BlockValidatorOption(block.NewValidator(
@@ -805,6 +809,7 @@ func TestLoadBlockchainfromDB(t *testing.T) {
 			cfg,
 			dao,
 			sf,
+			sf,
 			RegistryOption(registry),
 			BlockValidatorOption(block.NewValidator(
 				sf,
@@ -832,6 +837,7 @@ func TestLoadBlockchainfromDB(t *testing.T) {
 		bc = NewBlockchain(
 			cfg,
 			dao,
+			sf,
 			sf,
 			RegistryOption(registry),
 			BlockValidatorOption(block.NewValidator(
@@ -1062,6 +1068,7 @@ func TestBlockchainInitialCandidate(t *testing.T) {
 		cfg,
 		nil,
 		sf,
+		sf,
 		BoltDBDaoOption(),
 		RegistryOption(registry),
 		BlockValidatorOption(sf),
@@ -1098,7 +1105,7 @@ func TestBlockchain_AccountState(t *testing.T) {
 	require.NoError(acc.Register(registry))
 	sf, err := factory.NewFactory(cfg, factory.InMemTrieOption())
 	require.NoError(err)
-	bc := NewBlockchain(cfg, nil, sf, InMemDaoOption(), RegistryOption(registry))
+	bc := NewBlockchain(cfg, nil, sf, sf, InMemDaoOption(), RegistryOption(registry))
 	require.NoError(bc.Start(context.Background()))
 	require.NotNil(bc)
 	s, err := accountutil.AccountState(sf, identityset.Address(0).String())
@@ -1139,7 +1146,7 @@ func TestBlocks(t *testing.T) {
 	sf, _ := factory.NewFactory(cfg, factory.InMemTrieOption())
 
 	// Create a blockchain from scratch
-	bc := NewBlockchain(cfg, nil, sf, BoltDBDaoOption(), RegistryOption(registry))
+	bc := NewBlockchain(cfg, nil, sf, sf, BoltDBDaoOption(), RegistryOption(registry))
 	require.NoError(bc.Start(context.Background()))
 	defer func() {
 		require.NoError(bc.Stop(context.Background()))
@@ -1212,6 +1219,7 @@ func TestActions(t *testing.T) {
 		cfg,
 		nil,
 		sf,
+		sf,
 		BoltDBDaoOption(),
 		RegistryOption(registry),
 		BlockValidatorOption(block.NewValidator(
@@ -1271,7 +1279,7 @@ func TestBlockchain_AddSubscriber(t *testing.T) {
 	registry := protocol.NewRegistry()
 	sf, err := factory.NewFactory(cfg, factory.InMemTrieOption())
 	req.NoError(err)
-	bc := NewBlockchain(cfg, nil, sf, InMemDaoOption(), RegistryOption(registry))
+	bc := NewBlockchain(cfg, nil, sf, sf, InMemDaoOption(), RegistryOption(registry))
 	// mock
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1289,7 +1297,7 @@ func TestBlockchain_RemoveSubscriber(t *testing.T) {
 	registry := protocol.NewRegistry()
 	sf, err := factory.NewFactory(cfg, factory.InMemTrieOption())
 	req.NoError(err)
-	bc := NewBlockchain(cfg, nil, sf, InMemDaoOption(), RegistryOption(registry))
+	bc := NewBlockchain(cfg, nil, sf, sf, InMemDaoOption(), RegistryOption(registry))
 	// mock
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1513,6 +1521,7 @@ func newChain(t *testing.T, stateTX bool) (Blockchain, factory.Factory, db.KVSto
 	bc := NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		RegistryOption(registry),
 		BlockValidatorOption(block.NewValidator(

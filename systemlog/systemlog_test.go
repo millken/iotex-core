@@ -226,7 +226,7 @@ func TestSystemLogIndexer(t *testing.T) {
 
 		blocks, expectedList := getTestBlocksAndExpected(t)
 		for _, blk := range blocks {
-			r.NoError(indexer.PutBlock(blk))
+			r.NoError(indexer.PutBlock(ctx, blk))
 		}
 		tipHeight, err = indexer.TipHeight()
 		r.NoError(err)

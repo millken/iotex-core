@@ -196,6 +196,7 @@ func TestBlockSyncerProcessBlockTipHeight(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		bc.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(sf, ap)),
 	)
@@ -258,6 +259,7 @@ func TestBlockSyncerProcessBlockOutOfOrder(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		bc.RegistryOption(registry),
 		bc.BlockValidatorOption(block.NewValidator(sf, ap1)),
 	)
@@ -282,6 +284,7 @@ func TestBlockSyncerProcessBlockOutOfOrder(t *testing.T) {
 	chain2 := bc.NewBlockchain(
 		cfg,
 		dao2,
+		sf2,
 		sf2,
 		bc.RegistryOption(registry2),
 		bc.BlockValidatorOption(block.NewValidator(sf2, ap2)),
@@ -360,6 +363,7 @@ func TestBlockSyncerProcessBlockSync(t *testing.T) {
 		cfg,
 		dao,
 		sf,
+		sf,
 		bc.RegistryOption(registry),
 		bc.BlockValidatorOption(block.NewValidator(sf, ap1)),
 	)
@@ -383,6 +387,7 @@ func TestBlockSyncerProcessBlockSync(t *testing.T) {
 	chain2 := bc.NewBlockchain(
 		cfg,
 		dao2,
+		sf2,
 		sf2,
 		bc.RegistryOption(registry2),
 		bc.BlockValidatorOption(block.NewValidator(sf2, ap2)),
@@ -453,6 +458,7 @@ func TestBlockSyncerSync(t *testing.T) {
 	chain := bc.NewBlockchain(
 		cfg,
 		dao,
+		sf,
 		sf,
 		bc.RegistryOption(registry),
 		bc.BlockValidatorOption(block.NewValidator(sf, ap)),

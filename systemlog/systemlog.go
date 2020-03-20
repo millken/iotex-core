@@ -95,7 +95,7 @@ func (x *Indexer) TipHeight() (uint64, error) {
 }
 
 // PutBlock indexes the block
-func (x *Indexer) PutBlock(blk *block.Block) error {
+func (x *Indexer) PutBlock(_ context.Context, blk *block.Block) error {
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 

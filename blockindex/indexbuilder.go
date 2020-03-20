@@ -94,7 +94,7 @@ func (ib *IndexBuilder) Indexer() Indexer {
 // ReceiveBlock handles the block and create the indices for the actions and receipts in it
 func (ib *IndexBuilder) ReceiveBlock(blk *block.Block) error {
 	timer := ib.timerFactory.NewTimer("indexBlock")
-	if err := ib.indexer.PutBlock(blk); err != nil {
+	if err := ib.indexer.PutBlock(context.Background(), blk); err != nil {
 		log.L().Error(
 			"Error when indexing the block",
 			zap.Uint64("height", blk.Height()),

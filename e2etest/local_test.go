@@ -177,6 +177,7 @@ func TestLocalCommit(t *testing.T) {
 		cfg,
 		nil,
 		sf2,
+		sf2,
 		blockchain.BoltDBDaoOption(),
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(

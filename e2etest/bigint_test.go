@@ -84,6 +84,7 @@ func prepareBlockchain(ctx context.Context, executor string, r *require.Assertio
 		cfg,
 		dao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(
 			sf,

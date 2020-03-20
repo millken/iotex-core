@@ -51,6 +51,7 @@ func TestBlockBufferFlush(t *testing.T) {
 		cfg,
 		nil,
 		sf,
+		sf,
 		blockchain.InMemDaoOption(),
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(sf, ap)),
@@ -149,6 +150,7 @@ func TestBlockBufferGetBlocksIntervalsToSync(t *testing.T) {
 	chain := blockchain.NewBlockchain(
 		cfg,
 		nil,
+		sf,
 		sf,
 		blockchain.InMemDaoOption(),
 		blockchain.RegistryOption(registry),

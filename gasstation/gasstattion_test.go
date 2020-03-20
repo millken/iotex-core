@@ -56,6 +56,7 @@ func TestSuggestGasPriceForUserAction(t *testing.T) {
 		cfg,
 		blkMemDao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(
 			sf,
@@ -135,6 +136,7 @@ func TestSuggestGasPriceForSystemAction(t *testing.T) {
 		cfg,
 		blkMemDao,
 		sf,
+		sf,
 		blockchain.RegistryOption(registry),
 		blockchain.BlockValidatorOption(block.NewValidator(
 			sf,
@@ -188,7 +190,7 @@ func TestEstimateGasForAction(t *testing.T) {
 	blkMemDao := blockdao.NewBlockDAO(db.NewMemKVStore(), nil, cfg.Chain.CompressBlock, cfg.DB)
 	sf, err := factory.NewFactory(cfg, factory.InMemTrieOption())
 	require.NoError(err)
-	bc := blockchain.NewBlockchain(cfg, blkMemDao, sf)
+	bc := blockchain.NewBlockchain(cfg, blkMemDao, sf, sf)
 	require.NoError(bc.Start(context.Background()))
 	require.NotNil(bc)
 	gs := NewGasStation(bc, sf.SimulateExecution, blkMemDao, config.Default.API)

@@ -75,8 +75,8 @@ func TestIndexBuilder(t *testing.T) {
 		defer ib.Stop(context.Background())
 
 		// put 2 blocks first
-		require.NoError(dao.PutBlock(blks[0]))
-		require.NoError(dao.PutBlock(blks[1]))
+		require.NoError(dao.PutBlock(ctx, blks[0]))
+		require.NoError(dao.PutBlock(ctx, blks[1]))
 		startHeight, err := ib.indexer.TipHeight()
 		require.NoError(err)
 		require.EqualValues(0, startHeight)
@@ -91,7 +91,7 @@ func TestIndexBuilder(t *testing.T) {
 		require.EqualValues(2, height)
 
 		// test handle 1 new block
-		require.NoError(dao.PutBlock(blks[2]))
+		require.NoError(dao.PutBlock(ctx, blks[2]))
 		ib.ReceiveBlock(blks[2])
 		time.Sleep(500 * time.Millisecond)
 
