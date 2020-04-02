@@ -150,6 +150,8 @@ github.com/influxdata/influxdb v1.7.8 h1:oXd5TjXzU1b+xyFaH/8Ij+nCoUgyuO3ZDpgCuo6
 github.com/influxdata/influxdb v1.7.8/go.mod h1:qZna6X/4elxqT3yI9iZYdZrWWdeFOOprn86kgg4+IzY=
 github.com/iotexproject/go-ethereum v0.3.0 h1:chpHLe8Ndf41zGjixatOEDS0BiKYatoWpdKSOlG3vHA=
 github.com/iotexproject/go-ethereum v0.3.0/go.mod h1:0kgLtjZ8cxwjgFgxjsTPn1zxTeJkHXeUd77lcT4OqvU=
+github.com/iotexproject/go-ethereum v1.7.3 h1:KSS0EYW6K94niHQDADl7HHE1YPcHthWaEHKxyAVDbFY=
+github.com/iotexproject/go-ethereum v1.7.3/go.mod h1:0kgLtjZ8cxwjgFgxjsTPn1zxTeJkHXeUd77lcT4OqvU=
 github.com/iotexproject/go-fsm v1.0.0 h1:Zrg9JnNDUZg4Anpj6oa0Tk4+sXbHTpJzI0v5/Cj5N6A=
 github.com/iotexproject/go-fsm v1.0.0/go.mod h1:t3aYXtCCcQxyS7oduQZyuUpPnVI4ddFTwbAagHN7fT0=
 github.com/iotexproject/go-p2p v0.2.12 h1:xLn8RVDZjMDbupMxGClp5sO+fPBesvFg+uNgRsiDnfA=
@@ -159,6 +161,7 @@ github.com/iotexproject/go-pkgs v0.1.2-0.20200212033110-8fa5cf96fc1b h1:ztTFq2YL
 github.com/iotexproject/go-pkgs v0.1.2-0.20200212033110-8fa5cf96fc1b/go.mod h1:vP6jDCmhY5F4jtWD1hf1BTlY5hu+0q0oqALfBL7pY+k=
 github.com/iotexproject/iotex-address v0.2.1 h1:ZJH2ajx5OBrbaRJ0ZWlWUo685zr5kjWijVjtmUrm42E=
 github.com/iotexproject/iotex-address v0.2.1/go.mod h1:ONmTqmg6zO7VWF9TcWN+UrreFr/xpazlv9PWOALbLFA=
+github.com/iotexproject/iotex-antenna-go v1.0.0 h1:6/6GB/s4tR18fQdvFyHWX2fzGMWL0ZQZovX5djfB/Rg=
 github.com/iotexproject/iotex-antenna-go/v2 v2.3.2 h1:xCJa1QYV/f9cSF9z32fFmfTcGb8sYvn1No+uDlgwABA=
 github.com/iotexproject/iotex-antenna-go/v2 v2.3.2/go.mod h1:R6WIWVfZAnpSo8llzEsSoGJgHSYeYamjBqG35oHpgxU=
 github.com/iotexproject/iotex-election v0.2.11 h1:opQk5DVVtem2u6tIO/wFND4qX9QqpL8Pb/hiPG3fuFw=
