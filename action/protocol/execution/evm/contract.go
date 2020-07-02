@@ -11,10 +11,12 @@ import (
 
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/db/trie"
 	"github.com/iotexproject/iotex-core/db/trie/mptrie"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -37,7 +39,6 @@ type (
 		SetCode(hash.Hash256, []byte)
 		SelfState() *state.Account
 		Commit() error
-		RootHash() hash.Hash256
 		LoadRoot() error
 		Iterator() (trie.Iterator, error)
 		Snapshot() Contract
@@ -89,12 +90,6 @@ func (c *contract) SetState(key hash.Hash256, value []byte) error {
 	if err != nil {
 		return err
 	}
-	rh, err := c.trie.RootHash()
-	if err != nil {
-		return err
-	}
-	// TODO (zhi): confirm whether we should update the root on err
-	c.Account.Root = hash.BytesToHash256(rh)
 
 	return nil
 }
@@ -147,11 +142,6 @@ func (c *contract) Commit() error {
 	return nil
 }
 
-// RootHash returns storage trie's root hash
-func (c *contract) RootHash() hash.Hash256 {
-	return c.Account.Root
-}
-
 // LoadRoot loads storage trie's root
 func (c *contract) LoadRoot() error {
 	return c.trie.SetRootHash(c.Account.Root[:])
@@ -159,6 +149,13 @@ func (c *contract) LoadRoot() error {
 
 // Snapshot takes a snapshot of the contract object
 func (c *contract) Snapshot() Contract {
+	if c.dirtyState {
+		rh, err := c.trie.RootHash()
+		if err != nil {
+			log.L().Fatal("failed to get trie root hash", zap.Error(err))
+		}
+		c.Account.Root = hash.BytesToHash256(rh)
+	}
 	return &contract{
 		Account:    c.Account.Clone(),
 		dirtyCode:  c.dirtyCode,
