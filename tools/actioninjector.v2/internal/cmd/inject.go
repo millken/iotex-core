@@ -284,20 +284,14 @@ func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
 	contract := c.Contract(address, abiJSONVar)
 	var caller iotex.SendActionCaller
 	amount := injectCfg.executionAmount
-	switch rand.Intn(3) {
+	switch rand.Intn(2) {
 	case 0:
-		caller = contract.Execute("", big.NewInt(10), amount).
-			SetNonce(nonce).
-			SetAmount(amount).
-			SetGasPrice(injectCfg.executionGasPrice).
-			SetGasLimit(injectCfg.executionGasLimit)
-	case 1:
 		caller = contract.Execute("mint").
 			SetNonce(nonce).
 			SetAmount(injectCfg.executionAmount).
 			SetGasPrice(injectCfg.executionGasPrice).
 			SetGasLimit(injectCfg.executionGasLimit)
-	case 2:
+	case 1:
 		receiver := p.accounts[rand.Intn(len(p.accounts))]
 		ethAddress, _ := ioToEthAddress(receiver.EncodedAddr)
 		caller = contract.Execute("transfer", ethAddress, amount).
