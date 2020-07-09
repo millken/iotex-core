@@ -281,29 +281,28 @@ func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
 	address, _ := address.FromString(injectCfg.contract)
 	abiJSONVar, _ := abi.JSON(strings.NewReader(_abiStr))
 	contract := c.Contract(address, abiJSONVar)
-	var caller iotex.SendActionCaller 
+	var caller iotex.SendActionCaller
 	switch rand.Intn(3) {
-	case 0: 
+	case 0:
 		caller = contract.Execute("", uint64(10), uint64(20)).
-		SetNonce(nonce).
-		SetAmount(injectCfg.executionAmount).
-		SetGasPrice(injectCfg.executionGasPrice).
-		SetGasLimit(injectCfg.executionGasLimit)
-	case 1: 
+			SetNonce(nonce).
+			SetAmount(injectCfg.executionAmount).
+			SetGasPrice(injectCfg.executionGasPrice).
+			SetGasLimit(injectCfg.executionGasLimit)
+	case 1:
 		caller = contract.Execute("mint").
-		SetNonce(nonce).
-		SetAmount(injectCfg.executionAmount).
-		SetGasPrice(injectCfg.executionGasPrice).
-		SetGasLimit(injectCfg.executionGasLimit)
-	case 2: 
+			SetNonce(nonce).
+			SetAmount(injectCfg.executionAmount).
+			SetGasPrice(injectCfg.executionGasPrice).
+			SetGasLimit(injectCfg.executionGasLimit)
+	case 2:
 		receiver := p.accounts[rand.Intn(len(p.accounts))]
-		caller =  contract.Execute("transfer", receiver.EncodedAddr, uint64(10)).
-		SetNonce(nonce).
-		SetAmount(injectCfg.executionAmount).
-		SetGasPrice(injectCfg.executionGasPrice).
-		SetGasLimit(injectCfg.executionGasLimit)
+		caller = contract.Execute("transfer", receiver.EncodedAddr, uint64(10)).
+			SetNonce(nonce).
+			SetAmount(injectCfg.executionAmount).
+			SetGasPrice(injectCfg.executionGasPrice).
+			SetGasLimit(injectCfg.executionGasLimit)
 	}
-	
 	return caller, nil
 }
 
@@ -447,7 +446,7 @@ func init() {
 	flag.Uint64Var(&rawInjectCfg.transferGasLimit, "transfer-gas-limit", 20000, "transfer gas limit")
 	flag.Int64Var(&rawInjectCfg.transferGasPrice, "transfer-gas-price", 0, "transfer gas price")
 	flag.StringVar(&rawInjectCfg.contract, "contract", "io1pmjhyksxmz2xpxn2qmz4gx9qq2kn2gdr8un4xq", "smart contract address")
-	flag.Int64Var(&rawInjectCfg.executionAmount, "execution-amount", 0, "execution amount")
+	flag.Int64Var(&rawInjectCfg.executionAmount, "execution-amount", 100, "execution amount")
 	flag.Uint64Var(&rawInjectCfg.executionGasLimit, "execution-gas-limit", 100000, "execution gas limit")
 	flag.Int64Var(&rawInjectCfg.executionGasPrice, "execution-gas-price", 0, "execution gas price")
 	flag.StringVar(&rawInjectCfg.actionType, "action-type", "transfer", "action type to inject")
