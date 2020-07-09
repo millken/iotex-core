@@ -21,6 +21,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/iotexproject/go-pkgs/crypto"
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-address/address"
@@ -282,11 +283,12 @@ func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
 	abiJSONVar, _ := abi.JSON(strings.NewReader(_abiStr))
 	contract := c.Contract(address, abiJSONVar)
 	var caller iotex.SendActionCaller
+	amount := injectCfg.executionAmount
 	switch rand.Intn(3) {
 	case 0:
-		caller = contract.Execute("", uint64(10), uint64(20)).
+		caller = contract.Execute("", big.NewInt(10), amount).
 			SetNonce(nonce).
-			SetAmount(injectCfg.executionAmount).
+			SetAmount(amount).
 			SetGasPrice(injectCfg.executionGasPrice).
 			SetGasLimit(injectCfg.executionGasLimit)
 	case 1:
@@ -297,13 +299,22 @@ func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
 			SetGasLimit(injectCfg.executionGasLimit)
 	case 2:
 		receiver := p.accounts[rand.Intn(len(p.accounts))]
-		caller = contract.Execute("transfer", receiver.EncodedAddr, uint64(10)).
+		ethAddress, _ := ioToEthAddress(receiver.EncodedAddr)
+		caller = contract.Execute("transfer", ethAddress, amount).
 			SetNonce(nonce).
-			SetAmount(injectCfg.executionAmount).
+			SetAmount(amount).
 			SetGasPrice(injectCfg.executionGasPrice).
 			SetGasLimit(injectCfg.executionGasLimit)
 	}
 	return caller, nil
+}
+
+func ioToEthAddress(str string) (common.Address, error) {
+	addr, err := address.FromString(str)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return common.BytesToAddress(addr.Bytes()), nil
 }
 
 func (p *injectProcessor) transferCaller() (iotex.SendActionCaller, error) {
@@ -366,7 +377,7 @@ var rawInjectCfg = struct {
 	insecure      bool
 
 	randAccounts    int
-	loadTokenAmount int64
+	loadTokenAmount string
 }{}
 
 var injectCfg = struct {
@@ -399,7 +410,10 @@ func inject(_ []string) string {
 	transferGasPrice := big.NewInt(rawInjectCfg.transferGasPrice)
 	executionGasPrice := big.NewInt(rawInjectCfg.executionGasPrice)
 	executionAmount := big.NewInt(rawInjectCfg.executionAmount)
-	loadTokenAmount := big.NewInt(rawInjectCfg.loadTokenAmount)
+	loadTokenAmount, ok := new(big.Int).SetString(rawInjectCfg.loadTokenAmount, 10)
+	if !ok {
+		log.L().Fatal("Failed to parse flag", zap.String("load token amount", rawInjectCfg.loadTokenAmount))
+	}
 
 	injectCfg.configPath = rawInjectCfg.configPath
 	injectCfg.serverAddr = rawInjectCfg.serverAddr
@@ -446,7 +460,7 @@ func init() {
 	flag.Uint64Var(&rawInjectCfg.transferGasLimit, "transfer-gas-limit", 20000, "transfer gas limit")
 	flag.Int64Var(&rawInjectCfg.transferGasPrice, "transfer-gas-price", 0, "transfer gas price")
 	flag.StringVar(&rawInjectCfg.contract, "contract", "io1pmjhyksxmz2xpxn2qmz4gx9qq2kn2gdr8un4xq", "smart contract address")
-	flag.Int64Var(&rawInjectCfg.executionAmount, "execution-amount", 100, "execution amount")
+	flag.Int64Var(&rawInjectCfg.executionAmount, "execution-amount", 10, "execution amount")
 	flag.Uint64Var(&rawInjectCfg.executionGasLimit, "execution-gas-limit", 100000, "execution gas limit")
 	flag.Int64Var(&rawInjectCfg.executionGasPrice, "execution-gas-price", 0, "execution gas price")
 	flag.StringVar(&rawInjectCfg.actionType, "action-type", "transfer", "action type to inject")
@@ -459,6 +473,6 @@ func init() {
 	flag.Uint64Var(&rawInjectCfg.workers, "workers", 10, "number of workers")
 	flag.BoolVar(&rawInjectCfg.insecure, "insecure", false, "insecure network")
 	flag.BoolVar(&rawInjectCfg.checkReceipt, "check-recipt", false, "check recept")
-	flag.Int64Var(&rawInjectCfg.loadTokenAmount, "load-token-amount", 0, "init load how much token to inject accounts")
+	flag.StringVar(&rawInjectCfg.loadTokenAmount, "load-token-amount", "0", "init load how much token to inject accounts")
 	rootCmd.AddCommand(injectCmd)
 }
