@@ -3,22 +3,46 @@ package cmd
 var _abiStr = `
 [
 	{
+		"constant": false,
+		"inputs": [],
+		"name": "mint",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"constant": true,
 		"inputs": [
 			{
-				"name": "_member",
+				"name": "",
 				"type": "address"
-			},
-			{
-				"name": "_timestamp",
-				"type": "uint64"
 			}
 		],
-		"name": "hash",
+		"name": "balances",
 		"outputs": [
 			{
 				"name": "",
-				"type": "string"
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "heights",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"payable": false,
@@ -29,19 +53,56 @@ var _abiStr = `
 		"constant": false,
 		"inputs": [
 			{
-				"name": "_timestamp",
-				"type": "uint64"
+				"name": "_receiver",
+				"type": "address"
 			},
 			{
-				"name": "_hash",
-				"type": "string"
+				"name": "_amount",
+				"type": "uint256"
 			}
 		],
-		"name": "addHash",
+		"name": "transfer",
 		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "_period",
+				"type": "uint256"
+			},
+			{
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"name": "receiver",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "TokenTransfered",
+		"type": "event"
 	}
 ]
 `

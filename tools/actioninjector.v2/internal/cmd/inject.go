@@ -11,7 +11,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -268,6 +267,7 @@ func (p *injectProcessor) pickAction() (iotex.SendActionCaller, error) {
 }
 
 func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
+	fmt.Println("send out execute action")
 	var nonce uint64
 	sender := p.accounts[rand.Intn(len(p.accounts))]
 	val, ok := p.nonces.Load(sender.EncodedAddr)
@@ -281,18 +281,29 @@ func (p *injectProcessor) executionCaller() (iotex.SendActionCaller, error) {
 	address, _ := address.FromString(injectCfg.contract)
 	abiJSONVar, _ := abi.JSON(strings.NewReader(_abiStr))
 	contract := c.Contract(address, abiJSONVar)
-
-	data := rand.Int63()
-	var dataBuf = make([]byte, 8)
-	binary.BigEndian.PutUint64(dataBuf, uint64(data))
-	dataHash := sha256.Sum256(dataBuf)
-
-	caller := contract.Execute("addHash", uint64(time.Now().Unix()), hex.EncodeToString(dataHash[:])).
+	var caller iotex.SendActionCaller 
+	switch rand.Intn(3) {
+	case 0: 
+		caller = contract.Execute("", uint64(10), uint64(20)).
 		SetNonce(nonce).
 		SetAmount(injectCfg.executionAmount).
 		SetGasPrice(injectCfg.executionGasPrice).
 		SetGasLimit(injectCfg.executionGasLimit)
-
+	case 1: 
+		caller = contract.Execute("mint").
+		SetNonce(nonce).
+		SetAmount(injectCfg.executionAmount).
+		SetGasPrice(injectCfg.executionGasPrice).
+		SetGasLimit(injectCfg.executionGasLimit)
+	case 2: 
+		receiver := p.accounts[rand.Intn(len(p.accounts))]
+		caller =  contract.Execute("transfer", receiver.EncodedAddr, uint64(10)).
+		SetNonce(nonce).
+		SetAmount(injectCfg.executionAmount).
+		SetGasPrice(injectCfg.executionGasPrice).
+		SetGasLimit(injectCfg.executionGasLimit)
+	}
+	
 	return caller, nil
 }
 
@@ -326,8 +337,8 @@ func (p *injectProcessor) transferCaller() (iotex.SendActionCaller, error) {
 // injectCmd represents the inject command
 var injectCmd = &cobra.Command{
 	Use:   "inject",
-	Short: "inject actions [options : -m] (default:random)",
-	Long:  `inject actions [options : -m] (default:random).`,
+	Short: "inject actions (default:random)",
+	Long:  `inject actions (default:random).`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(inject(args))
 	},
