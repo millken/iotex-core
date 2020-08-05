@@ -8,6 +8,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -232,12 +233,21 @@ func getChainConfig(hu config.HeightUpgrade) *params.ChainConfig {
 	chainConfig.BeringBlock = new(big.Int).SetUint64(hu.BeringBlockHeight())
 	// enable earlier Ethereum forks at Greenland
 	chainConfig.GreenlandBlock = new(big.Int).SetUint64(hu.GreenlandBlockHeight())
+	fmt.Printf("beringHeight %v\n", chainConfig.BeringBlock)
+	fmt.Printf("greenlandHeight %v\n", chainConfig.GreenlandBlock)
 	return &chainConfig
 }
 
 //Error in executeInEVM is a consensus issue
 func executeInEVM(evmParams *Params, stateDB *StateDBAdapter, hu config.HeightUpgrade, gasLimit uint64, blockHeight uint64) ([]byte, uint64, uint64, string, uint64, error) {
 	isBering := hu.IsPost(config.Bering, blockHeight)
+	isPacific := hu.IsPost(config.Pacific, blockHeight)
+	isAleutian := hu.IsPost(config.Aleutian, blockHeight)
+	isGreenland := hu.IsPost(config.Greenland, blockHeight)
+	fmt.Printf("postPacific %v\n", isPacific)
+	fmt.Printf("postAleutian %v\n", isAleutian)
+	fmt.Printf("postBering %v\n", isBering)
+	fmt.Printf("postGreenland %v\n", isGreenland)
 	remainingGas := evmParams.gas
 	if err := securityDeposit(evmParams, stateDB, gasLimit); err != nil {
 		log.L().Warn("unexpected error: not enough security deposit", zap.Error(err))
@@ -259,10 +269,27 @@ func executeInEVM(evmParams *Params, stateDB *StateDBAdapter, hu config.HeightUp
 	var ret []byte
 	var evmErr error
 	if evmParams.contract == nil {
+		fmt.Printf("gasLimit %v\n", gasLimit)
+		fmt.Printf("intriGas %v\n", intriGas)
+		fmt.Printf("remainingGas %v\n", remainingGas)
+		fmt.Printf("evmParams.context.Origin %x\n", evmParams.context.Origin)
+		fmt.Printf("evmParams.context.GasPrice %x\n", evmParams.context.GasPrice)
+		fmt.Printf("evmParams.context.Coinbase %x\n", evmParams.context.Coinbase)
+		fmt.Printf("evmParams.context.GasLimit %v\n", evmParams.context.GasLimit)
+		fmt.Printf("evmParams.context.BlockNumber %v\n", evmParams.context.BlockNumber)
+		fmt.Printf("evmParams.context.Time %v\n", evmParams.context.Time)
+		fmt.Printf("evmParams.context.Difficulty %v\n", evmParams.context.Difficulty)
+		fmt.Printf("evmParams.nonce %v\n", evmParams.nonce)
+		fmt.Printf("evmParams.executorRawAddress %v\n", evmParams.executorRawAddress)
+		fmt.Printf("evmParams.amount %v\n", evmParams.amount)
+		fmt.Printf("evmParams.contract %v\n", evmParams.contract)
+		fmt.Printf("evmParams.gas %v\n", evmParams.gas)
 		// create contract
 		var evmContractAddress common.Address
 		_, evmContractAddress, remainingGas, evmErr = evm.Create(executor, evmParams.data, remainingGas, evmParams.amount)
-		log.L().Debug("evm Create.", log.Hex("addrHash", evmContractAddress[:]))
+		fmt.Printf("evm Create %x\n", evmContractAddress[:])
+		fmt.Printf("remainingGas %v\n", remainingGas)
+		fmt.Printf("evmErr %v\n", evmErr)
 		if evmErr == nil {
 			if contractAddress, err := address.FromBytes(evmContractAddress.Bytes()); err == nil {
 				contractRawAddress = contractAddress.String()
