@@ -9,7 +9,6 @@ package mptrie
 import (
 	"bytes"
 	"context"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/iotexproject/go-pkgs/hash"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/db/trie"
 	"github.com/iotexproject/iotex-core/db/trie/triepb"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -39,7 +39,7 @@ type (
 	HashFunc func([]byte) []byte
 
 	merklePatriciaTrie struct {
-		mutex         sync.RWMutex
+		mutex         deadlock.RWMutex
 		keyLength     int
 		root          branch
 		rootHash      []byte

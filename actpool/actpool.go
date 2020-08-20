@@ -10,7 +10,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +25,7 @@ import (
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/prometheustimer"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -90,7 +90,7 @@ func EnableExperimentalActions() Option {
 
 // actPool implements ActPool interface
 type actPool struct {
-	mutex                     sync.RWMutex
+	mutex                     deadlock.RWMutex
 	cfg                       config.ActPool
 	sf                        protocol.StateReader
 	accountActs               map[string]ActQueue

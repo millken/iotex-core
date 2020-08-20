@@ -7,11 +7,11 @@
 package staking
 
 import (
-	"sync"
-
 	"github.com/iotexproject/iotex-address/address"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 type (
@@ -22,7 +22,7 @@ type (
 
 	// candBase is the confirmed base state
 	candBase struct {
-		lock             sync.RWMutex
+		lock             deadlock.RWMutex
 		nameMap          map[string]*Candidate
 		ownerMap         map[string]*Candidate
 		operatorMap      map[string]*Candidate

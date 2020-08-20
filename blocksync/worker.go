@@ -9,7 +9,6 @@ package blocksync
 import (
 	"context"
 	"math/rand"
-	"sync"
 
 	"go.uber.org/zap"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/routine"
 	"github.com/iotexproject/iotex-proto/golang/iotexrpc"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type syncBlocksInterval struct {
@@ -26,7 +26,7 @@ type syncBlocksInterval struct {
 
 type syncWorker struct {
 	chainID          uint32
-	mu               sync.RWMutex
+	mu               deadlock.RWMutex
 	targetHeight     uint64
 	unicastHandler   UnicastOutbound
 	neighborsHandler Neighbors

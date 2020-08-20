@@ -7,22 +7,21 @@
 package batch
 
 import (
-	"sync"
-
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/pkg/errors"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type (
 	// baseKVStoreBatch is the base implementation of KVStoreBatch
 	baseKVStoreBatch struct {
-		mutex      sync.RWMutex
+		mutex      deadlock.RWMutex
 		writeQueue []*WriteInfo
 	}
 
 	// cachedBatch implements the CachedBatch interface
 	cachedBatch struct {
-		lock sync.RWMutex
+		lock deadlock.RWMutex
 		KVStoreCache
 		kvStoreBatch *baseKVStoreBatch
 		tag          int            // latest snapshot + 1

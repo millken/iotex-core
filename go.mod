@@ -10,6 +10,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9
 	github.com/golang/mock v1.4.0
 	github.com/golang/protobuf v1.4.2
+	github.com/gorilla/websocket v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/golang-lru v0.5.1
@@ -26,9 +27,11 @@ require (
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
 	github.com/minio/sha256-simd v0.1.1 // indirect
 	github.com/multiformats/go-multiaddr v0.0.2
+	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/rs/zerolog v1.14.3
+	github.com/sasha-s/go-deadlock v0.2.0
 	github.com/schollz/progressbar/v2 v2.15.0
 	github.com/spf13/cobra v0.0.4
 	github.com/stretchr/testify v1.4.0

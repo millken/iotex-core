@@ -9,9 +9,9 @@ package factory
 import (
 	"context"
 	"fmt"
+	"github.com/sasha-s/go-deadlock"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -90,7 +90,7 @@ type (
 	// factory implements StateFactory interface, tracks changes to account/contract and batch-commits to DB
 	factory struct {
 		lifecycle                lifecycle.Lifecycle
-		mutex                    sync.RWMutex
+		mutex                    deadlock.RWMutex
 		cfg                      config.Config
 		registry                 *protocol.Registry
 		currentChainHeight       uint64

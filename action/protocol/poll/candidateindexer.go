@@ -8,7 +8,6 @@ package poll
 
 import (
 	"context"
-	"sync"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -18,6 +17,8 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-core/state"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 
 // CandidateIndexer is an indexer to store candidate/probationList by given height
 type CandidateIndexer struct {
-	mutex   sync.RWMutex
+	mutex   deadlock.RWMutex
 	kvStore db.KVStore
 }
 

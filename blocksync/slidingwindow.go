@@ -7,13 +7,14 @@
 package blocksync
 
 import (
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/iotexproject/iotex-core/pkg/log"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -44,7 +45,7 @@ var (
 
 // SlidingWindow implements a sliding window
 type SlidingWindow struct {
-	mu        sync.RWMutex
+	mu        deadlock.RWMutex
 	start     time.Time
 	State     int
 	prevState int

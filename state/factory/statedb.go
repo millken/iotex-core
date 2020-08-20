@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -32,11 +31,13 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/prometheustimer"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-core/state"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // stateDB implements StateFactory interface, tracks changes to account/contract and batch-commits to DB
 type stateDB struct {
-	mutex                    sync.RWMutex
+	mutex                    deadlock.RWMutex
 	currentChainHeight       uint64
 	cfg                      config.Config
 	registry                 *protocol.Registry

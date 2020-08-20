@@ -40,6 +40,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/prometheustimer"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
+	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -122,7 +123,7 @@ type (
 		bodyCache     *cache.ThreadSafeLruCache
 		footerCache   *cache.ThreadSafeLruCache
 		cfg           config.DB
-		mutex         sync.RWMutex // for create new db file
+		mutex         deadlock.RWMutex // for create new db file
 		tipHeight     uint64
 	}
 )

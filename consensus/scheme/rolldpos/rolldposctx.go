@@ -8,7 +8,6 @@ package rolldpos
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/facebookgo/clock"
@@ -27,6 +26,8 @@ import (
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/endorsement"
 	"github.com/iotexproject/iotex-core/pkg/log"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -87,7 +88,7 @@ type rollDPoSCtx struct {
 	round       *roundCtx
 	clock       clock.Clock
 	active      bool
-	mutex       sync.RWMutex
+	mutex       deadlock.RWMutex
 }
 
 func newRollDPoSCtx(

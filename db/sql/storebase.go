@@ -10,12 +10,13 @@ import (
 	"context"
 	"database/sql"
 	"os"
-	"sync"
 
 	"github.com/rs/zerolog"
 
 	// this is required for sqlite3 usage
 	"github.com/iotexproject/iotex-core/pkg/lifecycle"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Store is the interface of KV store.
@@ -31,7 +32,7 @@ type Store interface {
 
 // storebase is local sqlite3
 type storeBase struct {
-	mutex      sync.RWMutex
+	mutex      deadlock.RWMutex
 	db         *sql.DB
 	connectStr string
 	driverName string

@@ -9,7 +9,6 @@ package blockchain
 import (
 	"context"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/lifecycle"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/prometheustimer"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -123,7 +123,7 @@ func Productivity(bc Blockchain, startHeight uint64, endHeight uint64) (map[stri
 
 // blockchain implements the Blockchain interface
 type blockchain struct {
-	mu             sync.RWMutex // mutex to protect utk, tipHeight and tipHash
+	mu             deadlock.RWMutex // mutex to protect utk, tipHeight and tipHash
 	dao            blockdao.BlockDAO
 	config         config.Config
 	blockValidator block.Validator

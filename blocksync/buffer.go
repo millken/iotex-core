@@ -7,8 +7,6 @@
 package blocksync
 
 import (
-	"sync"
-
 	"github.com/iotexproject/iotex-election/db"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -18,6 +16,7 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/consensus"
 	"github.com/iotexproject/iotex-core/pkg/log"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type bCheckinResult int
@@ -32,7 +31,7 @@ const (
 
 // blockBuffer is used to keep in-coming block in order.
 type blockBuffer struct {
-	mu           sync.RWMutex
+	mu           deadlock.RWMutex
 	blocks       map[uint64]*block.Block
 	bc           blockchain.Blockchain
 	cs           consensus.Consensus

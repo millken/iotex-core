@@ -24,6 +24,7 @@ import (
 	goproto "github.com/iotexproject/iotex-proto/golang"
 	"github.com/iotexproject/iotex-proto/golang/iotexrpc"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Subscriber is the dispatcher subscriber interface
@@ -101,12 +102,12 @@ type IotxDispatcher struct {
 	shutdown       int32
 	eventChan      chan interface{}
 	eventAudit     map[iotexrpc.MessageType]int
-	eventAuditLock sync.RWMutex
+	eventAuditLock deadlock.RWMutex
 	wg             sync.WaitGroup
 	quit           chan struct{}
 
 	subscribers   map[uint32]Subscriber
-	subscribersMU sync.RWMutex
+	subscribersMU deadlock.RWMutex
 }
 
 // NewDispatcher creates a new Dispatcher

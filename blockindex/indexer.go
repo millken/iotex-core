@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"math/big"
-	"sync"
 
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/pkg/errors"
@@ -21,6 +20,7 @@ import (
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/db/batch"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // the NS/bucket name here are used in index.db, which is separate from chain.db
@@ -62,7 +62,7 @@ type (
 
 	// blockIndexer implements the Indexer interface
 	blockIndexer struct {
-		mutex       sync.RWMutex
+		mutex       deadlock.RWMutex
 		genesisHash hash.Hash256
 		kvStore     db.KVStoreWithRange
 		batch       batch.KVStoreBatch
