@@ -8,6 +8,7 @@ package bc
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 
@@ -63,22 +64,22 @@ func init() {
 type blockMessage struct {
 	Node       string                `json:"node"`
 	Block      *iotextypes.BlockMeta `json:"block"`
-	ActionInfo []actionInfo          `json:actionInfo`
+	ActionInfo []*actionInfo         `json:actionInfo`
 }
 
 type actionInfo struct {
-	Version         uint32            `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
-	Nonce           uint64            `protobuf:"varint,2,opt,name=nonce,proto3" json:"nonce,omitempty"`
-	GasLimit        uint64            `protobuf:"varint,3,opt,name=gasLimit,proto3" json:"gasLimit,omitempty"`
-	GasPrice        string            `protobuf:"bytes,4,opt,name=gasPrice,proto3" json:"gasPrice,omitempty"`
-	SenderPubKey    []byte            `protobuf:"bytes,2,opt,name=senderPubKey,proto3" json:"senderPubKey,omitempty"`
-	Signature       []byte            `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
-	Status          uint64            `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	BlkHeight       uint64            `protobuf:"varint,2,opt,name=blkHeight,proto3" json:"blkHeight,omitempty"`
-	ActHash         []byte            `protobuf:"bytes,3,opt,name=actHash,proto3" json:"actHash,omitempty"`
-	GasConsumed     uint64            `protobuf:"varint,4,opt,name=gasConsumed,proto3" json:"gasConsumed,omitempty"`
-	ContractAddress string            `protobuf:"bytes,5,opt,name=contractAddress,proto3" json:"contractAddress,omitempty"`
-	Logs            []*iotextypes.Log `protobuf:"bytes,6,rep,name=logs,proto3" json:"logs,omitempty"`
+	Version         uint32
+	Nonce           uint64
+	GasLimit        uint64
+	GasPrice        string
+	SenderPubKey    string
+	Signature       string
+	Status          uint64
+	BlkHeight       uint64
+	ActHash         string
+	GasConsumed     uint64
+	ContractAddress string
+	Logs            []*iotextypes.Log
 }
 
 type blocksInfo struct {
@@ -123,7 +124,10 @@ func getBlock(args []string) error {
 	if err != nil {
 		return output.NewError(0, "failed to get block meta", err)
 	}
-	blockInfoMessage := blockMessage{Node: config.ReadConfig.Endpoint, Block: blockMeta, ActionInfo: nil}
+	blockInfoMessage := blockMessage{
+		Node: config.ReadConfig.Endpoint,
+		Block: blockMeta,
+	}
 	if verbose {
 		blocksInfos, err = getActionInfoWithinBlock(blockMeta.Height)
 		if err != nil {
@@ -137,16 +141,16 @@ func getBlock(args []string) error {
 					Nonce:           item.Core.Nonce,
 					GasLimit:        item.Core.GasLimit,
 					GasPrice:        item.Core.GasPrice,
-					SenderPubKey:    item.SenderPubKey,
-					Signature:       item.Signature,
+					SenderPubKey:    hex.EncodeToString(item.SenderPubKey),
+					Signature:       hex.EncodeToString(item.Signature),
 					Status:          Receipt.Status,
 					BlkHeight:       Receipt.BlkHeight,
-					ActHash:         Receipt.ActHash,
+					ActHash:         hex.EncodeToString(Receipt.ActHash),
 					GasConsumed:     Receipt.GasConsumed,
 					ContractAddress: Receipt.ContractAddress,
 					Logs:            Receipt.Logs,
 				}
-				blockInfoMessage.ActionInfo = append(blockInfoMessage.ActionInfo, actionInfo)
+				blockInfoMessage.ActionInfo = append(blockInfoMessage.ActionInfo, &actionInfo)
 			}
 		}
 	}
