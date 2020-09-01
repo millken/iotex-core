@@ -64,22 +64,54 @@ func init() {
 type blockMessage struct {
 	Node       string                `json:"node"`
 	Block      *iotextypes.BlockMeta `json:"block"`
-	ActionInfo []*actionInfo         `json:actionInfo`
+	ActionInfo []*actionInfo         `json:"actionInfo"`
+}
+
+type log struct {
+	ContractAddress string   `json:"contractAddress"`
+	Topics          []string `json:"topics"`
+	Data            string   `json:"data"`
+	BlkHeight       uint64   `json:"blkHeight"`
+	ActHash         string   `json:"actHash"`
+	Index           uint32   `json:"index"`
+}
+
+func convertLog(src *iotextypes.Log) *log {
+	topics := make([]string, 0, len(src.Topics))
+	for _, topic := range src.Topics {
+		topics = append(topics, hex.EncodeToString(topic))
+	}
+	return &log{
+		ContractAddress: src.ContractAddress,
+		Topics:          topics,
+		Data:            string(src.Data),
+		BlkHeight:       src.BlkHeight,
+		ActHash:         hex.EncodeToString(src.ActHash),
+		Index:           src.Index,
+	}
+}
+
+func convertLogs(src []*iotextypes.Log) []*log {
+	logs := make([]*log, 0, len(src))
+	for _, log := range src {
+		logs = append(logs, convertLog(log))
+	}
+	return logs
 }
 
 type actionInfo struct {
-	Version         uint32
-	Nonce           uint64
-	GasLimit        uint64
-	GasPrice        string
-	SenderPubKey    string
-	Signature       string
-	Status          uint64
-	BlkHeight       uint64
-	ActHash         string
-	GasConsumed     uint64
-	ContractAddress string
-	Logs            []*iotextypes.Log
+	Version         uint32 `json:"version"`
+	Nonce           uint64 `json:"nonce"`
+	GasLimit        uint64 `json:"gasLimit"`
+	GasPrice        string `json:"gasPrice"`
+	SenderPubKey    string `json:"senderPubKey"`
+	Signature       string `json:"signature"`
+	Status          uint64 `json:"status"`
+	BlkHeight       uint64 `json:"blkHeight"`
+	ActHash         string `json:"actHash"`
+	GasConsumed     uint64 `json:"gasConsumed"`
+	ContractAddress string `json:"contractAddress"`
+	Logs            []*log `json:"logs"`
 }
 
 type blocksInfo struct {
@@ -125,7 +157,7 @@ func getBlock(args []string) error {
 		return output.NewError(0, "failed to get block meta", err)
 	}
 	blockInfoMessage := blockMessage{
-		Node: config.ReadConfig.Endpoint,
+		Node:  config.ReadConfig.Endpoint,
 		Block: blockMeta,
 	}
 	if verbose {
@@ -148,7 +180,7 @@ func getBlock(args []string) error {
 					ActHash:         hex.EncodeToString(Receipt.ActHash),
 					GasConsumed:     Receipt.GasConsumed,
 					ContractAddress: Receipt.ContractAddress,
-					Logs:            Receipt.Logs,
+					Logs:            convertLogs(Receipt.Logs),
 				}
 				blockInfoMessage.ActionInfo = append(blockInfoMessage.ActionInfo, &actionInfo)
 			}
