@@ -1,4 +1,4 @@
-// Copyright (c) 2021 IoTeX Foundation
+// Copyright (c) 2023 IoTeX Foundation
 // This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
 // warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
 // permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
@@ -9,11 +9,12 @@ package db
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/iotexproject/go-pkgs/byteutil"
 	"github.com/pkg/errors"
+	"go.etcd.io/bbolt"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/iotexproject/iotex-core/db/batch"
@@ -32,18 +33,18 @@ type (
 	// have to) have multiple versions of value (corresponding to different heights
 	// in a blockchain)
 	//
-	// Versioning is achieved by using (key + 8-byte version) as actual storage key
-	// in the underlying DB. For buckets containing versioned keys, a metadata is
-	// stored at the special key = []byte{0}. The metadata specifies the bucket's
+	// A namespace/bucket is considered versioned by default, user needs to use the
+	// NonversionedNamespaceOption() to specify non-versioned namespaces at the time
+	// of creating the versioned key-value store
+	//
+	// Versioning is achieved by using (key + 8-byte version) as the actual storage
+	// key in the underlying DB. For buckets containing versioned keys, a metadata
+	// is stored at the special key = []byte{0}. The metadata specifies the bucket's
 	// name and the key length
 	//
 	// For each versioned key, the special location = key + []byte{0} stores the
 	// key's version (as 8-byte big endian). If the location does not store a value,
 	// the key has never been written. A zero value means the key has been deleted
-	//
-	// A namespace/bucket is considered versioned by default, user needs to use the
-	// NonversionedNamespaceOption() to specify non-versioned namespaces at the time
-	// of creating the versioned key-value store/DB
 	//
 	// Here's an example of a versioned DB which has 3 buckets:
 	// 1. "mta" -- regular bucket storing metadata, key is not versioned
@@ -62,9 +63,13 @@ type (
 		CreateVersionedNamespace(string, uint32) error
 	}
 
+	// Hasher is a function to compute hash
+	Hasher func([]byte) []byte
+
 	// BoltDBVersioned is KvVersioned implementation based on bolt DB
 	BoltDBVersioned struct {
 		*BoltDB
+		hasher       Hasher
 		version      uint64          // version for Get/Put()
 		versioned    map[string]int  // buckets for versioned keys
 		nonversioned map[string]bool // buckets for non-versioned keys
@@ -90,22 +95,11 @@ func VersionedNamespaceOption(ns string, n int) Option {
 	}
 }
 
-// NewMemoryDBVersioned instantiates an in-memory DB with implements KvVersioned
-// TODO: implement this
-func NewMemoryDBVersioned() *BoltDBVersioned {
-	b := &BoltDBVersioned{
-		BoltDB:       nil,
-		versioned:    make(map[string]int),
-		nonversioned: make(map[string]bool),
-	}
-
-	return b
-}
-
 // NewBoltDBVersioned instantiates an BoltDB with implements KvVersioned
-func NewBoltDBVersioned(cfg Config, opts ...Option) *BoltDBVersioned {
+func NewBoltDBVersioned(cfg Config, h Hasher, opts ...Option) *BoltDBVersioned {
 	b := &BoltDBVersioned{
 		BoltDB:       NewBoltDB(cfg),
+		hasher:       h,
 		versioned:    make(map[string]int),
 		nonversioned: make(map[string]bool),
 	}
@@ -139,9 +133,9 @@ func (b *BoltDBVersioned) Start(ctx context.Context) error {
 		}
 		if vn == nil {
 			// create the versioned namespace
-			buf.Put(ns, _minKey, (&VersionedNamespace{
-				Name:   ns,
-				KeyLen: uint32(n),
+			buf.Put(ns, _minKey, (&versionedNamespace{
+				name:   ns,
+				keyLen: uint32(n),
 			}).Serialize(), "failed to create metadata")
 		}
 	}
@@ -153,41 +147,57 @@ func (b *BoltDBVersioned) Start(ctx context.Context) error {
 
 // Put writes a <key, value> record
 func (b *BoltDBVersioned) Put(ns string, key, value []byte) error {
-	versioned, err := b.isVersioned(ns, key)
+	versioned, keyLen, err := b.isVersioned(ns, key)
 	if err != nil && err != ErrNotExist {
 		return err
 	}
-	if versioned {
-		buf := batch.NewBatch()
-		if err == ErrNotExist {
-			// namespace not yet created
-			buf.Put(ns, _minKey, (&VersionedNamespace{
-				Name:   ns,
-				KeyLen: uint32(len(key)),
-			}).Serialize(), "failed to create metadata")
-		}
-		buf.Put(ns, versionedKey(key, b.version), value, fmt.Sprintf("failed to put key %x", key))
-		buf.Put(ns, append(key, 0), byteutil.Uint64ToBytesBigEndian(b.version), fmt.Sprintf("failed to put key %x's version", key))
-		return b.BoltDB.WriteBatch(buf)
+	if !versioned {
+		return b.BoltDB.Put(ns, key, value)
 	}
-	return b.BoltDB.Put(ns, key, value)
+	buf := batch.NewBatch()
+	if err == ErrNotExist {
+		// namespace not yet created
+		buf.Put(ns, _minKey, (&versionedNamespace{
+			name:   ns,
+			keyLen: uint32(len(key)),
+		}).Serialize(), "failed to create metadata")
+		keyLen = len(key)
+	}
+	if len(key) != keyLen {
+		return errors.Wrapf(ErrInvalidKeyLength, "expecting %d, got %d", keyLen, len(key))
+	}
+	// check key's metadata
+	km, err := b.checkVersionedKey(ns, key)
+	if err != nil {
+		return err
+	}
+	km, exit := updateKeyMeta(km, b.version, b.hasher(value))
+	if exit {
+		return nil
+	}
+	buf.Put(ns, append(key, 0), km.Serialize(), fmt.Sprintf("failed to put key %x's meta", key))
+	buf.Put(ns, versionedKey(key, b.version), value, fmt.Sprintf("failed to put key %x", key))
+	return b.BoltDB.WriteBatch(buf)
 }
 
 // Get retrieves the most recent version
 func (b *BoltDBVersioned) Get(ns string, key []byte) ([]byte, error) {
-	versioned, err := b.isVersioned(ns, key)
+	versioned, keyLen, err := b.isVersioned(ns, key)
 	if err != nil {
 		return nil, err
 	}
 	if !versioned {
 		return b.BoltDB.Get(ns, key)
 	}
+	if len(key) != keyLen {
+		return nil, errors.Wrapf(ErrInvalidKeyLength, "expecting %d, got %d", keyLen, len(key))
+	}
 	return b.getVersion(ns, key)
 }
 
 // Version returns the key's most recent version
 func (b *BoltDBVersioned) Version(ns string, key []byte) (uint64, error) {
-	versioned, err := b.isVersioned(ns, key)
+	versioned, keyLen, err := b.isVersioned(ns, key)
 	if err != nil {
 		return 0, err
 	}
@@ -195,14 +205,21 @@ func (b *BoltDBVersioned) Version(ns string, key []byte) (uint64, error) {
 		_, err := b.BoltDB.Get(ns, key)
 		return 0, err
 	}
-	v, err := b.BoltDB.Get(ns, append(key, 0))
+	if len(key) != keyLen {
+		return 0, errors.Wrapf(ErrInvalidKeyLength, "expecting %d, got %d", keyLen, len(key))
+	}
+	km, err := b.checkVersionedKey(ns, key)
 	if err != nil {
 		return 0, err
 	}
-	return byteutil.BytesToUint64BigEndian(v), nil
+	if km == nil {
+		// key not yet written
+		return 0, ErrNotExist
+	}
+	return km.lastVersion, nil
 }
 
-// SetVersion sets the version, should ONLY be called before a Put() operation
+// SetVersion sets the version which a Get()/Put() wants to access
 func (b *BoltDBVersioned) SetVersion(v uint64) KvVersioned {
 	b.version = v
 	return b
@@ -220,7 +237,7 @@ func (b *BoltDBVersioned) CreateVersionedNamespace(ns string, n uint32) error {
 	if vn != nil {
 		return errors.Wrapf(ErrInvalidWrite, "namespace %s already exist", ns)
 	}
-	if err = b.BoltDB.Put(ns, _minKey, NewVersionedNamespace(ns, n).Serialize()); err != nil {
+	if err = b.BoltDB.Put(ns, _minKey, (&versionedNamespace{ns, n}).Serialize()); err != nil {
 		return err
 	}
 	b.versioned[ns] = int(n)
@@ -236,8 +253,13 @@ func (b *BoltDBVersioned) WriteBatch(kvsb batch.KVStoreBatch) (err error) {
 	kvsb.Lock()
 	defer kvsb.Unlock()
 	var (
-		newVNS = make(map[string]int)
-		cause  error
+		newVNS  = make(map[string]int)
+		buckets = make(map[string]*bbolt.Bucket)
+		cause   error
+		meta    []byte
+		vns     *versionedNamespace
+		km      *keyMeta
+		exit    bool
 	)
 	for c := uint8(0); c < b.config.NumRetries; c++ {
 		err = b.db.Update(func(tx *bolt.Tx) error {
@@ -250,42 +272,85 @@ func (b *BoltDBVersioned) WriteBatch(kvsb batch.KVStoreBatch) (err error) {
 				key := write.Key()
 				switch write.WriteType() {
 				case batch.Put:
-					bucket, e := tx.CreateBucketIfNotExists([]byte(ns))
-					if e != nil {
-						return errors.Wrapf(e, write.Error())
+					bucket, ok := buckets[ns]
+					if !ok {
+						bucket, e = tx.CreateBucketIfNotExists([]byte(ns))
+						if e != nil {
+							return errors.Wrapf(e, write.Error())
+						}
+						buckets[ns] = bucket
 					}
 					val := write.Value()
-					if bytes.Compare(_minKey, key) == 0 {
-						if b.nonversioned[ns] || b.versioned[ns] > 0 || newVNS[ns] > 0 {
+					if b.nonversioned[ns] {
+						if e := bucket.Put(key, val); e != nil {
+							return errors.Wrapf(e, write.Error())
+						}
+					} else if bytes.Compare(_minKey, key) == 0 {
+						if b.versioned[ns] > 0 || newVNS[ns] > 0 {
 							return errors.Wrapf(ErrInvalidWrite, write.Error())
 						}
-						vns := VersionedNamespace{}
-						if err := vns.Deserialize(val); err != nil {
-							return errors.Wrap(ErrInvalidWrite, err.Error())
+						if vns, e = DeserializeVersionedNamespace(val); e != nil {
+							return errors.Wrap(e, write.Error())
 						}
-						newVNS[ns] = int(vns.KeyLen)
+						newVNS[ns] = int(vns.keyLen)
+						if e := bucket.Put(key, val); e != nil {
+							return errors.Wrapf(e, write.Error())
+						}
 					} else {
+						// check namespace's key length
 						n := b.versioned[ns]
 						if n == 0 {
 							n = newVNS[ns]
 						}
-						if n > 0 {
-							if len(key) != n {
-								return errors.Wrapf(ErrInvalidKeyLength, write.Error())
+						if n == 0 {
+							if meta = bucket.Get(_minKey); meta == nil {
+								return errors.Wrapf(ErrDBCorruption, write.Error())
 							}
-							if e := bucket.Put(append(key, 0), byteutil.Uint64ToBytesBigEndian(b.version)); e != nil {
-								return errors.Wrapf(e, write.Error())
+							if vns, e = DeserializeVersionedNamespace(meta); e != nil {
+								return errors.Wrap(e, write.Error())
 							}
-							key = append(key, byteutil.Uint64ToBytesBigEndian(b.version)...)
+							n = int(vns.keyLen)
+							newVNS[ns] = int(vns.keyLen)
+						}
+						if n == 0 {
+							return errors.Wrap(ErrDBCorruption, write.Error())
+						}
+						if len(key) != n {
+							return errors.Wrapf(ErrInvalidKeyLength, write.Error())
+						}
+						// check key's metadata
+						hash := b.hasher(val)
+						if meta = bucket.Get(append(key, 0)); meta == nil {
+							// key not yet written
+							km = &keyMeta{
+								lastWriteHash: hash,
+								firstVersion:  b.version,
+								lastVersion:   b.version,
+								deleteVersion: math.MaxUint64,
+							}
+						} else {
+							if km, e = DeserializeKeyMeta(meta); e != nil {
+								return errors.Wrap(e, write.Error())
+							}
+							if km, exit = updateKeyMeta(km, b.version, hash); exit {
+								continue
+							}
+						}
+						if e = bucket.Put(append(key, 0), km.Serialize()); e != nil {
+							return errors.Wrapf(e, write.Error())
+						}
+						if e := bucket.Put(versionedKey(key, b.version), val); e != nil {
+							return errors.Wrapf(e, write.Error())
 						}
 					}
-					if e := bucket.Put(key, val); e != nil {
-						return errors.Wrapf(e, write.Error())
-					}
 				case batch.Delete:
-					bucket := tx.Bucket([]byte(ns))
-					if bucket == nil {
-						continue
+					bucket, ok := buckets[ns]
+					if !ok {
+						bucket = tx.Bucket([]byte(ns))
+						if bucket == nil {
+							continue
+						}
+						buckets[ns] = bucket
 					}
 					if e := bucket.Delete(key); e != nil {
 						return errors.Wrapf(e, write.Error())
@@ -295,8 +360,11 @@ func (b *BoltDBVersioned) WriteBatch(kvsb batch.KVStoreBatch) (err error) {
 			return nil
 		})
 		cause = errors.Cause(err)
-		if err == nil || cause == ErrInvalidWrite || cause == ErrInvalidKeyLength {
+		if err == nil || cause == ErrDBCorruption || cause == ErrInvalidWrite || cause == ErrInvalidKeyLength {
 			break
+		} else {
+			newVNS = make(map[string]int)
+			buckets = make(map[string]*bbolt.Bucket)
 		}
 	}
 	if err == nil {
@@ -305,10 +373,33 @@ func (b *BoltDBVersioned) WriteBatch(kvsb batch.KVStoreBatch) (err error) {
 		}
 		return
 	}
-	if cause != ErrInvalidWrite && cause != ErrInvalidKeyLength {
+	if cause != ErrDBCorruption && cause != ErrInvalidWrite && cause != ErrInvalidKeyLength {
 		err = errors.Wrap(ErrIO, err.Error())
 	}
 	return
+}
+
+func (b *BoltDBVersioned) getAllKeys(ns string) ([][]byte, error) {
+	keys := make([][]byte, 0)
+	err := b.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(ns))
+		if bucket == nil {
+			return errors.Wrapf(ErrNotExist, "bucket = %x doesn't exist", []byte(ns))
+		}
+		c := bucket.Cursor()
+		k, _ := c.First()
+		for k != nil {
+			key := make([]byte, len(k))
+			copy(key, k)
+			keys = append(keys, key)
+			k, _ = c.Next()
+		}
+		return nil
+	})
+	if err == nil {
+		return keys, nil
+	}
+	return nil, err
 }
 
 // getVersion retrieves the <k, v> at certain version
@@ -347,39 +438,39 @@ func versionedKey(key []byte, v uint64) []byte {
 	return append(key, byteutil.Uint64ToBytesBigEndian(v)...)
 }
 
-func (b *BoltDBVersioned) isVersioned(ns string, key []byte) (bool, error) {
+func (b *BoltDBVersioned) isVersioned(ns string, key []byte) (bool, int, error) {
 	if _, ok := b.nonversioned[ns]; ok {
-		return false, nil
+		return false, 0, nil
 	}
 	if keyLen, ok := b.versioned[ns]; ok {
 		if len(key) != keyLen {
-			return true, errors.Wrapf(ErrInvalidKeyLength, "expecting %d, got %d", keyLen, len(key))
+			return true, keyLen, errors.Wrapf(ErrInvalidKeyLength, "expecting %d, got %d", keyLen, len(key))
 		}
-		return true, nil
+		return true, keyLen, nil
 
 	}
 	// check if the namespace already exist in DB
 	vn, err := b.checkVersionedNS(ns)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	if vn != nil {
-		b.versioned[ns] = int(vn.KeyLen)
-		return true, nil
+		b.versioned[ns] = int(vn.keyLen)
+		return true, int(vn.keyLen), nil
 	}
 	// namespace not yet created
-	return true, ErrNotExist
+	return true, 0, ErrNotExist
 }
 
-func (b *BoltDBVersioned) checkVersionedNS(ns string) (*VersionedNamespace, error) {
+func (b *BoltDBVersioned) checkVersionedNS(ns string) (*versionedNamespace, error) {
 	data, err := b.BoltDB.Get(ns, _minKey)
 	switch errors.Cause(err) {
 	case nil:
-		vn := VersionedNamespace{}
-		if err := vn.Deserialize(data); err != nil {
+		vn, err := DeserializeVersionedNamespace(data)
+		if err != nil {
 			return nil, err
 		}
-		return &vn, nil
+		return vn, nil
 	case ErrNotExist, ErrBucketNotExist:
 		return nil, nil
 	default:
@@ -387,30 +478,42 @@ func (b *BoltDBVersioned) checkVersionedNS(ns string) (*VersionedNamespace, erro
 	}
 }
 
-// ======================================
-// funcs for VersionedNamespace object
-// ======================================
-
-// VersionedNamespace is the metadata for versioned namespace
-type VersionedNamespace struct {
-	Name   string `json:"name"`
-	KeyLen uint32 `json:"keyLen"`
-}
-
-// NewVersionedNamespace returns a new instance of VersionedNamespace
-func NewVersionedNamespace(ns string, n uint32) *VersionedNamespace {
-	return &VersionedNamespace{
-		Name:   ns,
-		KeyLen: n,
+func (b *BoltDBVersioned) checkVersionedKey(ns string, key []byte) (*keyMeta, error) {
+	data, err := b.BoltDB.Get(ns, append(key, 0))
+	switch errors.Cause(err) {
+	case nil:
+		km, err := DeserializeKeyMeta(data)
+		if err != nil {
+			return nil, err
+		}
+		return km, nil
+	case ErrNotExist, ErrBucketNotExist:
+		return nil, nil
+	default:
+		return nil, err
 	}
 }
 
-// Serialize to bytes
-func (vn *VersionedNamespace) Serialize() []byte {
-	return byteutil.Must(json.Marshal(vn))
-}
-
-// Deserialize from bytes
-func (vn *VersionedNamespace) Deserialize(data []byte) error {
-	return json.Unmarshal(data, vn)
+func updateKeyMeta(km *keyMeta, version uint64, hash []byte) (*keyMeta, bool) {
+	if km == nil {
+		// key not yet written
+		return &keyMeta{
+			lastWriteHash: hash,
+			firstVersion:  version,
+			lastVersion:   version,
+			deleteVersion: math.MaxUint64,
+		}, false
+	}
+	if version >= km.deleteVersion || version < km.lastVersion {
+		// 1. key has been deleted, do nothing
+		// 2. writing to an earlier version complicates things, for now it is not allowed
+		return km, true
+	}
+	if bytes.Equal(km.lastWriteHash, hash) {
+		// value has no change, do nothing
+		return km, true
+	}
+	km.lastWriteHash = hash
+	km.lastVersion = version
+	return km, false
 }

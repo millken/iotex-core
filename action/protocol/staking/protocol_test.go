@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -256,7 +257,10 @@ func Test_CreatePreStatesWithRegisterProtocol(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDBVersioned(cfg)
+	store := db.NewBoltDBVersioned(cfg, func(in []byte) []byte {
+		h := hash.Hash160b(in)
+		return h[:]
+	})
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 

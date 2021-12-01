@@ -16,6 +16,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/db/batch"
+	"github.com/iotexproject/iotex-core/pkg/util/addrutil"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 )
 
@@ -100,7 +101,11 @@ func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates *io
 		if err != nil {
 			return err
 		}
-		kvb.Put(StakingCandidatesNamespace, []byte(b.GetOwnerAddress()), v)
+		addr, err := addrutil.IoAddrToEvmAddr(b.GetOwnerAddress())
+		if err != nil {
+			return err
+		}
+		kvb.Put(StakingCandidatesNamespace, addr.Bytes(), v)
 	}
 	if err = kvb.Commit(); err != nil {
 		return err

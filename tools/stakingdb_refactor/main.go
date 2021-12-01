@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-core/action/protocol/staking"
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
@@ -99,7 +100,10 @@ func main() {
 	ctx := context.Background()
 	cfg := db.DefaultConfig
 	cfg.DbPath = _stakingDBV2Path
-	db2, err := staking.NewStakingCandidatesBucketsIndexer(db.NewBoltDBVersioned(cfg))
+	db2, err := staking.NewStakingCandidatesBucketsIndexer(db.NewBoltDBVersioned(cfg, func(in []byte) []byte {
+		h := hash.Hash160b(in)
+		return h[:]
+	}, db.NonversionedNamespaceOption(staking.StakingMetaNamespace)))
 	if err != nil {
 		log.Fatal(err)
 	}

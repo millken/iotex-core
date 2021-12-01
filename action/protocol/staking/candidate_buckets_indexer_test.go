@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -23,7 +24,10 @@ func TestCandidatesBucketsIndexer_PutGetCandidates(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDBVersioned(cfg)
+	store := db.NewBoltDBVersioned(cfg, func(in []byte) []byte {
+		h := hash.Hash160b(in)
+		return h[:]
+	})
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 	ctx := context.Background()
@@ -152,7 +156,10 @@ func TestCandidatesBucketsIndexer_PutGetBuckets(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDBVersioned(cfg)
+	store := db.NewBoltDBVersioned(cfg, func(in []byte) []byte {
+		h := hash.Hash160b(in)
+		return h[:]
+	})
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 	ctx := context.Background()

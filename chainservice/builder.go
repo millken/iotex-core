@@ -383,7 +383,7 @@ func (builder *Builder) createGateWayComponents(forTest bool) (
 			return
 		}
 		if builder.cfg.Chain.EnableStakingIndexer {
-			candBucketsIndexer, err = staking.NewStakingCandidatesBucketsIndexer(db.NewMemoryDBVersioned())
+			candBucketsIndexer, err = staking.NewStakingCandidatesBucketsIndexer(nil)
 		}
 		return
 	}
