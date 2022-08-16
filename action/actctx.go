@@ -80,6 +80,10 @@ func (act *AbstractAction) SetEnvelopeContext(elp Envelope) {
 
 // SanityCheck validates the variables in the action
 func (act *AbstractAction) SanityCheck() error {
+	if act.Nonce()+1 < act.Nonce() {
+		return ErrNonceExceed
+	}
+
 	// Reject execution of negative gas price
 	if act.GasPrice().Sign() < 0 {
 		return ErrNegativeValue

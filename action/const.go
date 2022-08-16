@@ -23,6 +23,7 @@ var (
 	ErrIntrinsicGas       = errors.New("intrinsic gas too low")
 	ErrInsufficientFunds  = errors.New("insufficient funds for gas * price + value")
 	ErrNonceTooHigh       = errors.New("nonce too high")
+	ErrNonceExceed        = errors.New("nonce exceeds 2^64-1")
 	ErrInvalidSender      = errors.New("invalid sender")
 	ErrTxPoolOverflow     = errors.New("txpool is full")
 	ErrGasLimit           = errors.New("exceeds block gas limit")
