@@ -15,6 +15,7 @@ import (
 	uconfig "go.uber.org/config"
 
 	"github.com/iotexproject/iotex-core/actpool"
+	"github.com/iotexproject/iotex-core/api"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/blockindex"
@@ -22,8 +23,6 @@ import (
 	"github.com/iotexproject/iotex-core/dispatcher"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/log"
-	"github.com/iotexproject/iotex-core/pkg/tracer"
-	"github.com/iotexproject/iotex-core/pkg/unit"
 )
 
 // IMPORTANT: to define a config, add a field or a new config type to the existing config types. In addition, provide
@@ -99,19 +98,7 @@ var (
 			RepeatDecayStep:       1,
 		},
 		Dispatcher: dispatcher.DefaultConfig,
-		API: API{
-			UseRDS:        false,
-			GRPCPort:      14014,
-			HTTPPort:      15014,
-			WebSocketPort: 16014,
-			TpsWindow:     10,
-			GasStation: GasStation{
-				SuggestBlockWindow: 20,
-				DefaultGas:         uint64(unit.Qev),
-				Percentile:         60,
-			},
-			RangeQueryLimit: 1000,
-		},
+		API:        api.DefaultConfig,
 		System: System{
 			Active:                true,
 			HeartbeatInterval:     10 * time.Second,
@@ -191,26 +178,6 @@ type (
 		CommitTTL                    time.Duration `yaml:"commitTTL"`
 	}
 
-	// API is the api service config
-	API struct {
-		UseRDS          bool          `yaml:"useRDS"`
-		GRPCPort        int           `yaml:"port"`
-		HTTPPort        int           `yaml:"web3port"`
-		WebSocketPort   int           `yaml:"webSocketPort"`
-		RedisCacheURL   string        `yaml:"redisCacheURL"`
-		TpsWindow       int           `yaml:"tpsWindow"`
-		GasStation      GasStation    `yaml:"gasStation"`
-		RangeQueryLimit uint64        `yaml:"rangeQueryLimit"`
-		Tracer          tracer.Config `yaml:"tracer"`
-	}
-
-	// GasStation is the gas station config
-	GasStation struct {
-		SuggestBlockWindow int    `yaml:"suggestBlockWindow"`
-		DefaultGas         uint64 `yaml:"defaultGas"`
-		Percentile         int    `yaml:"Percentile"`
-	}
-
 	// System is the system config
 	System struct {
 		// Active is the status of the node. True means active and false means stand-by
@@ -234,7 +201,7 @@ type (
 		DardanellesUpgrade DardanellesUpgrade          `yaml:"dardanellesUpgrade"`
 		BlockSync          BlockSync                   `yaml:"blockSync"`
 		Dispatcher         dispatcher.Config           `yaml:"dispatcher"`
-		API                API                         `yaml:"api"`
+		API                api.Config                  `yaml:"api"`
 		System             System                      `yaml:"system"`
 		DB                 db.Config                   `yaml:"db"`
 		Indexer            blockindex.Config           `yaml:"indexer"`

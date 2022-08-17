@@ -48,7 +48,6 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/blockindex"
 	"github.com/iotexproject/iotex-core/blocksync"
-	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/gasstation"
 	"github.com/iotexproject/iotex-core/pkg/log"
@@ -155,7 +154,7 @@ type (
 		ap                actpool.ActPool
 		gs                *gasstation.GasStation
 		broadcastHandler  BroadcastOutbound
-		cfg               config.API
+		cfg               Config
 		registry          *protocol.Registry
 		chainListener     apitypes.Listener
 		electionCommittee committee.Committee
@@ -200,7 +199,7 @@ var (
 
 // newcoreService creates a api server that contains major blockchain components
 func newCoreService(
-	cfg config.API,
+	cfg Config,
 	chain blockchain.Blockchain,
 	bs blocksync.BlockSync,
 	sf factory.Factory,
@@ -211,9 +210,9 @@ func newCoreService(
 	registry *protocol.Registry,
 	opts ...Option,
 ) (CoreService, error) {
-	if cfg == (config.API{}) {
+	if cfg == (Config{}) {
 		log.L().Warn("API server is not configured.")
-		cfg = config.Default.API
+		cfg = DefaultConfig
 	}
 
 	if cfg.RangeQueryLimit < uint64(cfg.TpsWindow) {

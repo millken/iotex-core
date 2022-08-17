@@ -278,28 +278,29 @@ func addActsToActPool(ctx context.Context, ap actpool.ActPool) error {
 	return ap.Add(ctx, execution1)
 }
 
-func setupChain(cfg config.Config) (blockchain.Blockchain, blockdao.BlockDAO, blockindex.Indexer, blockindex.BloomFilterIndexer, factory.Factory, actpool.ActPool, *protocol.Registry, string, error) {
-	cfg.Chain.ProducerPrivKey = hex.EncodeToString(identityset.PrivateKey(0).Bytes())
+func setupChain(chain blockchain.Config, g genesis.Genesis, ac actpool.Config) (blockchain.Blockchain, blockdao.BlockDAO, blockindex.Indexer, blockindex.BloomFilterIndexer, factory.Factory, actpool.ActPool, *protocol.Registry, string, error) {
+	chain.ProducerPrivKey = hex.EncodeToString(identityset.PrivateKey(0).Bytes())
 	registry := protocol.NewRegistry()
-	factoryCfg := factory.GenerateConfig(cfg.Chain, cfg.Genesis)
+	factoryCfg := factory.GenerateConfig(chain, g)
 	sf, err := factory.NewFactory(factoryCfg, db.NewMemKVStore(), factory.RegistryOption(registry))
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, "", err
 	}
-	ap, err := setupActPool(cfg.Genesis, sf, cfg.ActPool)
+	ap, err := setupActPool(g, sf, ac)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, "", err
 	}
-	cfg.Genesis.InitBalanceMap[identityset.Address(27).String()] = unit.ConvertIotxToRau(10000000000).String()
-	cfg.Genesis.InitBalanceMap[identityset.Address(28).String()] = unit.ConvertIotxToRau(10000000000).String()
+	g.InitBalanceMap[identityset.Address(27).String()] = unit.ConvertIotxToRau(10000000000).String()
+	g.InitBalanceMap[identityset.Address(28).String()] = unit.ConvertIotxToRau(10000000000).String()
 	// create indexer
-	indexer, err := blockindex.NewIndexer(db.NewMemKVStore(), cfg.Genesis.Hash())
+	indexer, err := blockindex.NewIndexer(db.NewMemKVStore(), g.Hash())
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, "", errors.New("failed to create indexer")
 	}
 	testPath, _ := testutil.PathOfTempFile("bloomfilter")
-	cfg.DB.DbPath = testPath
-	bfIndexer, err := blockindex.NewBloomfilterIndexer(db.NewBoltDB(cfg.DB), cfg.Indexer)
+	kv, _ := db.CreateKVStore(db.DefaultConfig, testPath)
+
+	bfIndexer, err := blockindex.NewBloomfilterIndexer(kv, blockindex.DefaultConfig)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, "", errors.New("failed to create bloomfilter indexer")
 	}
@@ -310,8 +311,8 @@ func setupChain(cfg config.Config) (blockchain.Blockchain, blockdao.BlockDAO, bl
 	}
 	// create chain
 	bc := blockchain.NewBlockchain(
-		cfg.Chain,
-		cfg.Genesis,
+		chain,
+		g,
 		dao,
 		factory.NewMinter(sf, ap),
 		blockchain.BlockValidatorOption(block.NewValidator(
@@ -328,14 +329,14 @@ func setupChain(cfg config.Config) (blockchain.Blockchain, blockdao.BlockDAO, bl
 
 	acc := account.NewProtocol(rewarding.DepositGas)
 	evm := execution.NewProtocol(dao.GetBlockHash, rewarding.DepositGas)
-	p := poll.NewLifeLongDelegatesProtocol(cfg.Genesis.Delegates)
+	p := poll.NewLifeLongDelegatesProtocol(g.Delegates)
 	rolldposProtocol := rolldpos.NewProtocol(
 		genesis.Default.NumCandidateDelegates,
 		genesis.Default.NumDelegates,
 		genesis.Default.NumSubEpochs,
-		rolldpos.EnableDardanellesSubEpoch(cfg.Genesis.DardanellesBlockHeight, cfg.Genesis.DardanellesNumSubEpochs),
+		rolldpos.EnableDardanellesSubEpoch(g.DardanellesBlockHeight, g.DardanellesNumSubEpochs),
 	)
-	r := rewarding.NewProtocol(cfg.Genesis.Rewarding)
+	r := rewarding.NewProtocol(g.Rewarding)
 
 	if err := rolldposProtocol.Register(registry); err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, "", err
@@ -367,8 +368,10 @@ func setupActPool(g genesis.Genesis, sf factory.Factory, cfg actpool.Config) (ac
 	return ap, nil
 }
 
-func newConfig() config.Config {
-	cfg := config.Default
+func newConfig() (blockchain.Config, genesis.Genesis, actpool.Config) {
+	chain := blockchain.DefaultConfig
+	g := genesis.Default
+	ac := actpool.DefaultConfig
 
 	testTriePath, err := testutil.PathOfTempFile("trie")
 	if err != nil {
@@ -393,18 +396,15 @@ func newConfig() config.Config {
 		testutil.CleanupPath(testSystemLogPath)
 	}()
 
-	cfg.Plugins[config.GatewayPlugin] = true
-	cfg.Chain.TrieDBPath = testTriePath
-	cfg.Chain.ChainDBPath = testDBPath
-	cfg.Chain.IndexDBPath = testIndexPath
-	cfg.Chain.EVMNetworkID = _evmNetworkID
-	cfg.System.SystemLogDBPath = testSystemLogPath
-	cfg.Chain.EnableAsyncIndexWrite = false
-	cfg.Genesis.EnableGravityChainVoting = true
-	cfg.ActPool.MinGasPriceStr = "0"
-	cfg.API.RangeQueryLimit = 100
+	chain.TrieDBPath = testTriePath
+	chain.ChainDBPath = testDBPath
+	chain.IndexDBPath = testIndexPath
+	chain.EVMNetworkID = _evmNetworkID
+	chain.EnableAsyncIndexWrite = false
+	g.EnableGravityChainVoting = true
+	ac.MinGasPriceStr = "0"
 
-	return cfg
+	return chain, g, ac
 }
 
 func createServerV2(cfg config.Config, needActPool bool) (*ServerV2, blockchain.Blockchain, blockdao.BlockDAO, blockindex.Indexer, *protocol.Registry, actpool.ActPool, string, error) {
