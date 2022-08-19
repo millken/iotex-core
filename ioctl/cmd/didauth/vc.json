@@ -1,0 +1,14 @@
+{
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1"
+    ],
+    "id": "650eaaf1-194c-4708-9b9d-646d18288629",
+    "type": ["VerifiableCredential", "AnalyserCredential"],
+    "issuer": "did:io:0x21b6e410e7a8274bde82dcb00686c46452392328",
+    "issuanceDate": "2022-07-01T19:73:24Z",
+    "expirationDate": "2032-07-01T19:73:24Z",
+    "credentialSubject": {
+      "id": "did:io:0x84f55566997a23c76c02df5c94b8972c48fc830c",
+      "level":"advanced"
+    }
+}

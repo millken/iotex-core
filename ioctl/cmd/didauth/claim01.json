@@ -1,0 +1,31 @@
+{
+    // VC内容所遵循的JSON-LD标准
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1",
+      "https://www.w3.org/2018/credentials/examples/v1"
+    ],
+    // 本VC的唯一标识，也就是证书ID
+    "id": "650eaaf1-194c-4708-9b9d-646d18288629",
+    // VC内容的格式
+    "type": ["VerifiableCredential", "AnalyserCredential"],
+    // 本VC的发行人
+    "issuer": "did:io:0x21b6e410e7a8274bde82dcb00686c46452392328",
+    // 本VC的发行时间
+    "issuanceDate": "2022-07-01T19:73:24Z",
+    // 本VC的过期时间
+    "expirationDate": "2022-07-01T19:73:24Z",
+    // VC声明的具体内容
+    "credentialSubject": {
+      // 被声明的人的DID
+      "id": "did:io:0x84f55566997a23c76c02df5c94b8972c48fc830c",
+      // 声明内容: API 版本等
+      "level":"advanced",
+    },
+    // 对本VC的证明
+    "proof": {
+      // 签名算法
+      "type": "Secp256k1",
+        // 签名值
+      "signatureValue": "3044022051757c2de7032a0c887c3fcef02ca3812fede7ca748254771b9513d8e2bb"
+    }
+  }

@@ -15,6 +15,7 @@ import (
 	"github.com/iotexproject/iotex-core/ioctl/cmd/bc"
 	"github.com/iotexproject/iotex-core/ioctl/cmd/contract"
 	"github.com/iotexproject/iotex-core/ioctl/cmd/did"
+	"github.com/iotexproject/iotex-core/ioctl/cmd/didauth"
 	"github.com/iotexproject/iotex-core/ioctl/cmd/hdwallet"
 	"github.com/iotexproject/iotex-core/ioctl/cmd/jwt"
 	"github.com/iotexproject/iotex-core/ioctl/cmd/node"
@@ -68,6 +69,7 @@ func NewIoctl() *cobra.Command {
 	rootCmd.AddCommand(update.UpdateCmd)
 	rootCmd.AddCommand(contract.ContractCmd)
 	rootCmd.AddCommand(did.DIDCmd)
+	rootCmd.AddCommand(didauth.DIDCmd)
 	rootCmd.AddCommand(hdwallet.HdwalletCmd)
 	rootCmd.AddCommand(jwt.JwtCmd)
 	rootCmd.PersistentFlags().StringVarP(&output.Format, "output-format", "o", "",
