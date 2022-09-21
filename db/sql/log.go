@@ -9,6 +9,9 @@ import (
 )
 
 func StoreAccount(sm protocol.StateManager, addr address.Address, account *state.Account) error {
+	if db == nil {
+		return nil
+	}
 	accountProto := account.ToProto()
 	votingWeight := new(big.Int).SetBytes(accountProto.VotingWeight).String()
 	height, err := sm.Height()
