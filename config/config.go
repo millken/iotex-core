@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/pkg/errors"
 	uconfig "go.uber.org/config"
 
@@ -241,6 +242,7 @@ type (
 		Log                log.GlobalConfig            `yaml:"log"`
 		SubLogs            map[string]log.GlobalConfig `yaml:"subLogs"`
 		Genesis            genesis.Genesis             `yaml:"genesis"`
+		Database           sql.Database                `yaml:"database"`
 	}
 
 	// Validate is the interface of validating the config

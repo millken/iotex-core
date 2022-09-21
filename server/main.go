@@ -28,6 +28,7 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/probe"
 	"github.com/iotexproject/iotex-core/pkg/recovery"
@@ -159,6 +160,11 @@ func main() {
 	if cfgsub.Chain.ID != 0 {
 		if err := svr.NewSubChainService(cfgsub); err != nil {
 			log.L().Fatal("Failed to new sub chain.", zap.Error(err))
+		}
+	}
+	if &cfg.Database != nil {
+		if _, err := sql.Open(&cfg.Database); err != nil {
+			log.L().Fatal("Failed to connect to database.", zap.Error(err))
 		}
 	}
 
