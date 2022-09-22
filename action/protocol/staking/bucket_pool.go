@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/iotexproject/go-pkgs/hash"
+	"github.com/iotexproject/iotex-address/address"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
@@ -140,7 +141,8 @@ func (bp *BucketPool) CreditPool(sm protocol.StateManager, amount *big.Int) erro
 	account := &state.Account{
 		Balance: bp.Total(),
 	}
-	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+	addr, _ := address.FromString(address.StakingBucketPoolAddr)
+	if err := sql.StoreAccount(sm, addr, account); err != nil {
 		return err
 	}
 	if bp.enableSMStorage {
@@ -156,7 +158,9 @@ func (bp *BucketPool) DebitPool(sm protocol.StateManager, amount *big.Int, newBu
 	account := &state.Account{
 		Balance: bp.Total(),
 	}
-	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+
+	addr, _ := address.FromString(address.StakingBucketPoolAddr)
+	if err := sql.StoreAccount(sm, addr, account); err != nil {
 		return err
 	}
 	if bp.enableSMStorage {

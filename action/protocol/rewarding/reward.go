@@ -330,7 +330,8 @@ func (p *Protocol) updateTotalBalance(ctx context.Context, sm protocol.StateMana
 	account := &state.Account{
 		Balance: totalBalance,
 	}
-	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+	addr, _ := address.FromString(address.RewardingPoolAddr)
+	if err := sql.StoreAccount(sm, addr, account); err != nil {
 		return err
 	}
 	f.totalBalance = totalBalance
