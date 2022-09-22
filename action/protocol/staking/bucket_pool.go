@@ -14,6 +14,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/staking/stakingpb"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -136,7 +137,12 @@ func (bp *BucketPool) CreditPool(sm protocol.StateManager, amount *big.Int) erro
 	if err := bp.total.SubBalance(amount); err != nil {
 		return err
 	}
-
+	account := &state.Account{
+		Balance: bp.Total(),
+	}
+	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+		return err
+	}
 	if bp.enableSMStorage {
 		_, err := sm.PutState(bp.total, protocol.NamespaceOption(_stakingNameSpace), protocol.KeyOption(_bucketPoolAddrKey))
 		return err
@@ -147,6 +153,12 @@ func (bp *BucketPool) CreditPool(sm protocol.StateManager, amount *big.Int) erro
 // DebitPool adds staked amount into the pool
 func (bp *BucketPool) DebitPool(sm protocol.StateManager, amount *big.Int, newBucket bool) error {
 	bp.total.AddBalance(amount, newBucket)
+	account := &state.Account{
+		Balance: bp.Total(),
+	}
+	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+		return err
+	}
 	if bp.enableSMStorage {
 		_, err := sm.PutState(bp.total, protocol.NamespaceOption(_stakingNameSpace), protocol.KeyOption(_bucketPoolAddrKey))
 		return err

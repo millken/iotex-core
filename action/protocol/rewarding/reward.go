@@ -22,6 +22,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol/poll"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding/rewardingpb"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/pkg/enc"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
@@ -324,6 +325,13 @@ func (p *Protocol) updateTotalBalance(ctx context.Context, sm protocol.StateMana
 	totalBalance := big.NewInt(0).Sub(f.totalBalance, amount)
 	if totalBalance.Cmp(big.NewInt(0)) < 0 {
 		return errors.New("no enough total balance")
+	}
+
+	account := &state.Account{
+		Balance: totalBalance,
+	}
+	if err := sql.StoreAccount(sm, ProtocolAddr(), account); err != nil {
+		return err
 	}
 	f.totalBalance = totalBalance
 	return p.putState(ctx, sm, _fundKey, &f)
