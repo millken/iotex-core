@@ -20,6 +20,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding/rewardingpb"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -88,6 +89,15 @@ func (p *Protocol) Deposit(
 	}
 	f.totalBalance = big.NewInt(0).Add(f.totalBalance, amount)
 	f.unclaimedBalance = big.NewInt(0).Add(f.unclaimedBalance, amount)
+
+	account := &state.Account{
+		Balance: f.totalBalance,
+	}
+	addr, _ := address.FromString(address.RewardingPoolAddr)
+	if err := sql.StoreAccount(sm, addr, account); err != nil {
+		return nil, err
+	}
+
 	if err := p.putState(ctx, sm, _fundKey, &f); err != nil {
 		return nil, err
 	}

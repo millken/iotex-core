@@ -8,6 +8,7 @@ import (
 )
 
 var db *sql.DB
+var dbOpened bool
 
 type Database struct {
 	Host     string `yaml:"host"`
@@ -23,6 +24,7 @@ func (cfg *Database) DSN() string {
 
 func Open(cfg *Database) (*sql.DB, error) {
 	var err error
+	dbOpened = true
 	db, err = sql.Open("postgres", cfg.DSN())
 	return db, err
 }
