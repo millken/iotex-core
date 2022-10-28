@@ -7,7 +7,6 @@
 package state
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -85,7 +84,6 @@ func (st *Account) ToProto() *accountpb.Account {
 	if st.votingWeight != nil {
 		acPb.VotingWeight = st.votingWeight.Bytes()
 	}
-	fmt.Printf("Balance %s VotingWeight %s\n", acPb.Balance, acPb.VotingWeight)
 	return acPb
 }
 
@@ -196,7 +194,6 @@ func (st *Account) HasSufficientBalance(amount *big.Int) bool {
 
 // AddBalance adds balance for account state
 func (st *Account) AddBalance(amount *big.Int) error {
-	fmt.Println("Account AddBalance", amount)
 	if amount == nil || amount.Sign() < 0 {
 		return errors.Wrapf(ErrInvalidAmount, "amount %s shouldn't be negative", amount.String())
 	}
@@ -210,9 +207,6 @@ func (st *Account) AddBalance(amount *big.Int) error {
 
 // SubBalance subtracts balance for account state
 func (st *Account) SubBalance(amount *big.Int) error {
-	if amount.String() == "2892839000000000000" {
-		fmt.Println("Account SubBalance", amount)
-	}
 	if amount == nil || amount.Cmp(big.NewInt(0)) < 0 {
 		return errors.Wrapf(ErrInvalidAmount, "amount %s shouldn't be negative", amount.String())
 	}

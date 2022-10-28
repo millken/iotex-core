@@ -9,7 +9,6 @@ package evm
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"math/big"
 
@@ -241,8 +240,6 @@ func ExecuteContract(
 	}
 	var depositLog *action.TransactionLog
 	if depositGas-remainingGas > 0 {
-		fmt.Printf("depositGas: %d, remainingGas: %d, gasPrice: %d\n", depositGas, remainingGas, ps.txCtx.GasPrice)
-
 		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(depositGas-remainingGas), ps.txCtx.GasPrice)
 		depositLog, err = depositGasFunc(ctx, sm, gasValue)
 		if err != nil {
@@ -353,8 +350,6 @@ func getChainConfig(g genesis.Blockchain, height uint64, id uint32) *params.Chai
 
 // Error in executeInEVM is a consensus issue
 func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapter, g genesis.Blockchain, gasLimit uint64, blockHeight uint64) ([]byte, uint64, uint64, string, iotextypes.ReceiptStatus, error) {
-	ctx, span := tracer.NewSpan(ctx, "executeInEVM")
-	defer span.End()
 	remainingGas := evmParams.gas
 	if err := securityDeposit(evmParams, stateDB, gasLimit); err != nil {
 		log.L().Warn("unexpected error: not enough security deposit", zap.Error(err))
@@ -382,7 +377,7 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 	remainingGas -= intriGas
 
 	// Set up the initial access list
-	if rules := chainConfig.Rules(evm.Context.BlockNumber); rules.IsBerlin {
+	if rules := chainConfig.Rules(evm.Context.BlockNumber, false); rules.IsBerlin {
 		stateDB.PrepareAccessList(evmParams.txCtx.Origin, evmParams.contract, vm.ActivePrecompiles(rules), evmParams.accessList)
 	}
 	var (
@@ -436,7 +431,6 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 		featureCtx             = protocol.MustGetFeatureCtx(ctx)
 	)
 	if evmErr != nil && !featureCtx.CorrectGasRefund && evm.TxContext.HitErrWriteProtection && refundBeforeDynamicGas != currentRefund {
-		fmt.Println("HIT stateDB Refund change", refundBeforeDynamicGas, currentRefund)
 		if refundBeforeDynamicGas > currentRefund {
 			stateDB.AddRefund(refundBeforeDynamicGas - currentRefund)
 		} else {
@@ -449,12 +443,6 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 	remainingGas += refund
 
 	errCode := iotextypes.ReceiptStatus_Success
-	if evmErr != nil {
-		println("evmErr =", evmErr.Error())
-		println("curr refund =", stateDB.GetRefund())
-		println("EXIT refund =", refund)
-		println()
-	}
 	if evmErr != nil {
 		errCode = evmErrToErrStatusCode(evmErr, g, blockHeight)
 		if errCode == iotextypes.ReceiptStatus_ErrUnknown {

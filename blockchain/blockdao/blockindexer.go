@@ -69,9 +69,6 @@ func (bic *BlockIndexerChecker) CheckIndexer(ctx context.Context, indexer BlockI
 		targetHeight = daoTip
 	}
 	for i := tipHeight + 1; i <= targetHeight; i++ {
-		if i > 12117999 {
-			return errors.New("12117999 reached")
-		}
 		blk, err := bic.dao.GetBlockByHeight(i)
 		if err != nil {
 			return err
