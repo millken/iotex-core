@@ -8,6 +8,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/iotexproject/go-pkgs/hash"
@@ -270,6 +271,7 @@ func (ws *workingSet) PutState(s interface{}, opts ...protocol.StateOption) (uin
 	if err != nil {
 		return ws.height, errors.Wrapf(err, "failed to convert account %v to bytes", s)
 	}
+	fmt.Printf("workingSet.PutState %s %x %x\n", cfg.Namespace, cfg.Key, ss)
 	return ws.height, ws.store.Put(cfg.Namespace, cfg.Key, ss)
 }
 

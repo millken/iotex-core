@@ -7,8 +7,11 @@
 package batch
 
 import (
+	"encoding/hex"
+	"fmt"
 	"sync"
 
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/pkg/errors"
 )
 
@@ -70,6 +73,8 @@ func (b *baseKVStoreBatch) ClearAndUnlock() {
 func (b *baseKVStoreBatch) Put(namespace string, key, value []byte, errorMessage string) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	fmt.Printf("baseKVStoreBatch.Put %s %x %x %s\n", namespace, key, value, errorMessage)
+
 	b.batch(Put, namespace, key, value, errorMessage)
 }
 
@@ -252,6 +257,8 @@ func (cb *cachedBatch) touchKey(h kvCacheKey) {
 	}
 }
 
+var i1 int
+
 // Put inserts a <key, value> record
 func (cb *cachedBatch) Put(namespace string, key, value []byte, errorMessage string) {
 	cb.lock.Lock()
@@ -259,6 +266,11 @@ func (cb *cachedBatch) Put(namespace string, key, value []byte, errorMessage str
 	h := cb.hash(namespace, key)
 	cb.touchKey(h)
 	cb.currentCache().Write(&h, value)
+	if hex.EncodeToString(key) == "c62661bae6e8346725305318476521e87977e371" {
+		i1++
+		//fmt.Println("put", i1)
+	}
+	log.L().Debug(fmt.Sprintf("cachedBatch.Put %s %x %x %s\n", namespace, key, value, errorMessage))
 	cb.kvStoreBatch.batch(Put, namespace, key, value, errorMessage)
 }
 

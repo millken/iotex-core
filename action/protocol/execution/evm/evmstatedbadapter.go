@@ -258,6 +258,7 @@ func (stateDB *StateDBAdapter) SubBalance(evmAddr common.Address, amount *big.In
 
 // AddBalance adds balance to account
 func (stateDB *StateDBAdapter) AddBalance(evmAddr common.Address, amount *big.Int) {
+	fmt.Printf("AddBalance %v to %s\n", amount, evmAddr.Hex())
 	if amount.Cmp(big.NewInt(int64(0))) == 0 {
 		return
 	}
@@ -411,7 +412,7 @@ func (stateDB *StateDBAdapter) AddRefund(gas uint64) {
 
 // GetRefund gets refund
 func (stateDB *StateDBAdapter) GetRefund() uint64 {
-	log.L().Debug("Called GetRefund.")
+	//log.L().Debug("Called GetRefund.")
 	return stateDB.refund
 }
 
