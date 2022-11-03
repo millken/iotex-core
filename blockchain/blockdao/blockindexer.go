@@ -16,6 +16,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
+	"github.com/iotexproject/iotex-core/db/batch"
 	"github.com/iotexproject/iotex-core/pkg/log"
 )
 
@@ -69,6 +70,10 @@ func (bic *BlockIndexerChecker) CheckIndexer(ctx context.Context, indexer BlockI
 		targetHeight = daoTip
 	}
 	for i := tipHeight + 1; i <= targetHeight; i++ {
+		batch.SetInsertBlockHeight(i)
+		if i > 5020517 {
+			return errors.New("reached 5020517")
+		}
 		blk, err := bic.dao.GetBlockByHeight(i)
 		if err != nil {
 			return err

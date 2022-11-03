@@ -7,10 +7,25 @@
 package batch
 
 import (
+	"encoding/hex"
+	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/errors"
 )
+
+var (
+	InsertBlockHeight uint64
+)
+
+func SetInsertBlockHeight(height uint64) {
+	atomic.StoreUint64(&InsertBlockHeight, height)
+}
+
+func NeedBreakBlockHeight() bool {
+	return atomic.LoadUint64(&InsertBlockHeight) == 5020517
+}
 
 type (
 	// baseKVStoreBatch is the base implementation of KVStoreBatch
@@ -259,6 +274,9 @@ func (cb *cachedBatch) Put(namespace string, key, value []byte, errorMessage str
 	h := cb.hash(namespace, key)
 	cb.touchKey(h)
 	cb.currentCache().Write(&h, value)
+	if NeedBreakBlockHeight() {
+		fmt.Printf("Put %s %s %s\n", namespace, hex.EncodeToString(key), hex.EncodeToString(value))
+	}
 	cb.kvStoreBatch.batch(Put, namespace, key, value, errorMessage)
 }
 
