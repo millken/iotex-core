@@ -8,6 +8,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/iotexproject/go-pkgs/hash"
@@ -372,6 +373,7 @@ func (ws *workingSet) process(ctx context.Context, actions []action.SealedEnvelo
 	if err := ws.validate(ctx); err != nil {
 		return err
 	}
+	glitch, _ := ctx.Value("glitch").(bool)
 
 	reg := protocol.MustGetRegistry(ctx)
 	for _, act := range actions {
@@ -381,6 +383,9 @@ func (ws *workingSet) process(ctx context.Context, actions []action.SealedEnvelo
 		}
 		for _, p := range reg.All() {
 			if validator, ok := p.(protocol.ActionValidator); ok {
+				if glitch {
+					fmt.Printf("handling action %T ActionValidator %T with protocol %s\n", act.Action(), validator, p.Name())
+				}
 				if err := validator.Validate(ctxWithActionContext, act.Action(), ws); err != nil {
 					return err
 				}
@@ -389,6 +394,9 @@ func (ws *workingSet) process(ctx context.Context, actions []action.SealedEnvelo
 	}
 	for _, p := range reg.All() {
 		if pp, ok := p.(protocol.PreStatesCreator); ok {
+			if glitch {
+				fmt.Printf("handling PreStatesCreator %T with protocol %s\n", pp, p.Name())
+			}
 			if err := pp.CreatePreStates(ctx, ws); err != nil {
 				return err
 			}
@@ -524,6 +532,10 @@ func (ws *workingSet) ValidateBlock(ctx context.Context, blk *block.Block) error
 	if err := ws.validateNonce(ctx, blk); err != nil {
 		return errors.Wrap(err, "failed to validate nonce")
 	}
+	if blk.Height() == 5020517 {
+		ctx = context.WithValue(ctx, "glitch", true)
+		fmt.Printf("blk action len %d\n", len(blk.RunnableActions().Actions()))
+	}
 	if err := ws.process(ctx, blk.RunnableActions().Actions()); err != nil {
 		log.L().Error("Failed to update state.", zap.Uint64("height", ws.height), zap.Error(err))
 		return err
@@ -534,7 +546,8 @@ func (ws *workingSet) ValidateBlock(ctx context.Context, blk *block.Block) error
 		return err
 	}
 	if !blk.VerifyDeltaStateDigest(digest) {
-		return errors.Wrapf(block.ErrDeltaStateMismatch, "digest in block '%x' vs digest in workingset '%x'", blk.DeltaStateDigest(), digest)
+		log.L().Fatal("block delta state digest is not correct")
+		//return errors.Wrapf(block.ErrDeltaStateMismatch, "digest in block '%x' vs digest in workingset '%x'", blk.DeltaStateDigest(), digest)
 	}
 	receiptRoot := calculateReceiptRoot(ws.receipts)
 	if !blk.VerifyReceiptRoot(receiptRoot) {

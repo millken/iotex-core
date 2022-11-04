@@ -30,7 +30,6 @@ import (
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/probe"
-	"github.com/iotexproject/iotex-core/pkg/recovery"
 	"github.com/iotexproject/iotex-core/server/itx"
 )
 
@@ -103,10 +102,10 @@ func main() {
 		glog.Fatalln("Cannot config global logger, use default one: ", zap.Error(err))
 	}
 
-	if err = recovery.SetCrashlogDir(cfg.System.SystemLogDBPath); err != nil {
-		glog.Fatalln("Failed to set directory of crashlog: ", zap.Error(err))
-	}
-	defer recovery.Recover()
+	// if err = recovery.SetCrashlogDir(cfg.System.SystemLogDBPath); err != nil {
+	// 	glog.Fatalln("Failed to set directory of crashlog: ", zap.Error(err))
+	// }
+	// defer recovery.Recover()
 
 	// check EVM network ID and chain ID
 	if cfg.Chain.EVMNetworkID == 0 || cfg.Chain.ID == 0 {

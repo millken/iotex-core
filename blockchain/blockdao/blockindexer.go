@@ -72,7 +72,8 @@ func (bic *BlockIndexerChecker) CheckIndexer(ctx context.Context, indexer BlockI
 	for i := tipHeight + 1; i <= targetHeight; i++ {
 		batch.SetInsertBlockHeight(i)
 		if i > 5020517 {
-			return errors.New("reached 5020517")
+			log.L().Fatal("stop")
+			//return errors.New("reached 5020517")
 		}
 		blk, err := bic.dao.GetBlockByHeight(i)
 		if err != nil {
