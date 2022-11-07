@@ -8,7 +8,6 @@ package factory
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	"github.com/iotexproject/go-pkgs/hash"
@@ -384,7 +383,7 @@ func (ws *workingSet) process(ctx context.Context, actions []action.SealedEnvelo
 		for _, p := range reg.All() {
 			if validator, ok := p.(protocol.ActionValidator); ok {
 				if glitch {
-					fmt.Printf("handling action %T ActionValidator %T with protocol %s\n", act.Action(), validator, p.Name())
+					log.S().Errorf("handling action %T ActionValidator %T with protocol %s\n", act.Action(), validator, p.Name())
 				}
 				if err := validator.Validate(ctxWithActionContext, act.Action(), ws); err != nil {
 					return err
@@ -395,7 +394,7 @@ func (ws *workingSet) process(ctx context.Context, actions []action.SealedEnvelo
 	for _, p := range reg.All() {
 		if pp, ok := p.(protocol.PreStatesCreator); ok {
 			if glitch {
-				fmt.Printf("handling PreStatesCreator %T with protocol %s\n", pp, p.Name())
+				log.S().Errorf("handling PreStatesCreator %T with protocol %s\n", pp, p.Name())
 			}
 			if err := pp.CreatePreStates(ctx, ws); err != nil {
 				return err
@@ -534,7 +533,7 @@ func (ws *workingSet) ValidateBlock(ctx context.Context, blk *block.Block) error
 	}
 	if blk.Height() == 5020517 {
 		ctx = context.WithValue(ctx, "glitch", true)
-		fmt.Printf("blk action len %d\n", len(blk.RunnableActions().Actions()))
+		log.S().Errorf("blk action len %d\n", len(blk.RunnableActions().Actions()))
 	}
 	if err := ws.process(ctx, blk.RunnableActions().Actions()); err != nil {
 		log.L().Error("Failed to update state.", zap.Uint64("height", ws.height), zap.Error(err))

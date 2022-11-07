@@ -8,10 +8,10 @@ package batch
 
 import (
 	"encoding/hex"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/pkg/errors"
 )
 
@@ -275,7 +275,7 @@ func (cb *cachedBatch) Put(namespace string, key, value []byte, errorMessage str
 	cb.touchKey(h)
 	cb.currentCache().Write(&h, value)
 	if NeedBreakBlockHeight() {
-		fmt.Printf("Put %s %s %s\n", namespace, hex.EncodeToString(key), hex.EncodeToString(value))
+		log.S().Errorf("Put %s %s %s\n", namespace, hex.EncodeToString(key), hex.EncodeToString(value))
 	}
 	cb.kvStoreBatch.batch(Put, namespace, key, value, errorMessage)
 }
