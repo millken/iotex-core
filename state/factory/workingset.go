@@ -8,6 +8,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/iotexproject/go-pkgs/hash"
@@ -545,7 +546,7 @@ func (ws *workingSet) ValidateBlock(ctx context.Context, blk *block.Block) error
 		return err
 	}
 	if !blk.VerifyDeltaStateDigest(digest) {
-		log.L().Fatal("block delta state digest is not correct")
+		panic(fmt.Sprintf("block %d delta state digest doesn't match", blk.Height()))
 		//return errors.Wrapf(block.ErrDeltaStateMismatch, "digest in block '%x' vs digest in workingset '%x'", blk.DeltaStateDigest(), digest)
 	}
 	receiptRoot := calculateReceiptRoot(ws.receipts)
