@@ -14,6 +14,8 @@ import (
 	"github.com/iotexproject/iotex-address/address"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
+	"github.com/iotexproject/iotex-core/db/batch"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -140,6 +142,9 @@ func (csm *candSM) GetByOwner(addr address.Address) *Candidate {
 
 // Upsert writes the candidate into state manager and cand center
 func (csm *candSM) Upsert(d *Candidate) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("Upsert candidate=%s", d.Name)
+	}
 	if err := csm.candCenter.Upsert(d); err != nil {
 		return err
 	}
@@ -162,6 +167,9 @@ func (csm *candSM) CreditBucketPool(amount *big.Int) error {
 }
 
 func (csm *candSM) DebitBucketPool(amount *big.Int, newBucket bool) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("DebitBucketPool newBucket=%v amount=%s", newBucket, amount)
+	}
 	return csm.bucketPool.DebitPool(csm, amount, newBucket)
 }
 
@@ -228,6 +236,9 @@ func (csm *candSM) delBucket(index uint64) error {
 }
 
 func (csm *candSM) putBucketAndIndex(bucket *VoteBucket) (uint64, error) {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("putBucketAndIndex bucket=%d", bucket.Index)
+	}
 	index, err := csm.putBucket(bucket)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to put bucket")
@@ -259,6 +270,9 @@ func (csm *candSM) delBucketAndIndex(owner, cand address.Address, index uint64) 
 }
 
 func (csm *candSM) putBucketIndex(addr address.Address, prefix byte, index uint64) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("putBucketIndex bucket=%d", index)
+	}
 	var (
 		bis BucketIndices
 		key = AddrKeyWithPrefix(addr, prefix)
@@ -278,6 +292,9 @@ func (csm *candSM) putBucketIndex(addr address.Address, prefix byte, index uint6
 }
 
 func (csm *candSM) putVoterBucketIndex(addr address.Address, index uint64) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("putVoterBucketIndex bucket=%d", index)
+	}
 	return csm.putBucketIndex(addr, _voterIndex, index)
 }
 
@@ -313,6 +330,9 @@ func (csm *candSM) delVoterBucketIndex(addr address.Address, index uint64) error
 }
 
 func (csm *candSM) putCandidate(d *Candidate) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("putCandidate candidate=%s", d.Name)
+	}
 	_, err := csm.PutState(d, protocol.NamespaceOption(_candidateNameSpace), protocol.KeyOption(d.Owner.Bytes()))
 	return err
 }

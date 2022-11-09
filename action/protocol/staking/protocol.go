@@ -26,6 +26,7 @@ import (
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
+	"github.com/iotexproject/iotex-core/db/batch"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -376,6 +377,9 @@ func (p *Protocol) Handle(ctx context.Context, act action.Action, sm protocol.St
 	csm, err := NewCandidateStateManager(sm, featureWithHeightCtx.ReadStateFromDB(height))
 	if err != nil {
 		return nil, err
+	}
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("staking protocol handle act %T", act)
 	}
 
 	return p.handle(ctx, act, csm)

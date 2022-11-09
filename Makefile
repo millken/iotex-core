@@ -9,7 +9,7 @@
 # Go parameters
 GOCMD=go
 GOLINT=golint
-GOBUILD=$(GOCMD) build
+GOBUILD=$(GOCMD) build -race 
 GOINSTALL=$(GOCMD) install
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test

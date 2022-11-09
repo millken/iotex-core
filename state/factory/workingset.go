@@ -24,6 +24,7 @@ import (
 	"github.com/iotexproject/iotex-core/actpool"
 	"github.com/iotexproject/iotex-core/actpool/actioniterator"
 	"github.com/iotexproject/iotex-core/blockchain/block"
+	"github.com/iotexproject/iotex-core/db/batch"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -163,7 +164,13 @@ func (ws *workingSet) runAction(
 		return nil, errors.Wrapf(err, "Failed to get hash")
 	}
 	var receipt *action.Receipt
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("reg.All() = %v", reg.All())
+	}
 	for _, actionHandler := range reg.All() {
+		if batch.NeedBreakBlockHeight() {
+			log.S().Errorf("actionHandler %s => %T", actionHandler.Name(), actionHandler)
+		}
 		receipt, err = actionHandler.Handle(ctx, elp.Action(), ws)
 		if err != nil {
 			err = errors.Wrapf(

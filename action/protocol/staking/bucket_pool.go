@@ -14,6 +14,8 @@ import (
 
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/staking/stakingpb"
+	"github.com/iotexproject/iotex-core/db/batch"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -146,6 +148,9 @@ func (bp *BucketPool) CreditPool(sm protocol.StateManager, amount *big.Int) erro
 
 // DebitPool adds staked amount into the pool
 func (bp *BucketPool) DebitPool(sm protocol.StateManager, amount *big.Int, newBucket bool) error {
+	if batch.NeedBreakBlockHeight() {
+		log.S().Errorf("DebitPool newBucket=%v amount=%s bp.enableSMStorage=%v", newBucket, amount, bp.enableSMStorage)
+	}
 	bp.total.AddBalance(amount, newBucket)
 	if bp.enableSMStorage {
 		_, err := sm.PutState(bp.total, protocol.NamespaceOption(_stakingNameSpace), protocol.KeyOption(_bucketPoolAddrKey))

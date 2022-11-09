@@ -19,6 +19,8 @@ import (
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
+	"github.com/iotexproject/iotex-core/db/batch"
+	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -622,6 +624,9 @@ func (p *Protocol) handleRestake(ctx context.Context, act *action.Restake, csm C
 
 func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.CandidateRegister, csm CandidateStateManager,
 ) (*receiptLog, []*action.TransactionLog, error) {
+	if batch.NeedBreakBlockHeight() {
+		log.L().Error("handleCandidateRegister")
+	}
 	actCtx := protocol.MustGetActionCtx(ctx)
 	blkCtx := protocol.MustGetBlockCtx(ctx)
 	featureCtx := protocol.MustGetFeatureCtx(ctx)
