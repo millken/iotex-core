@@ -15,12 +15,13 @@ import (
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/db/batch"
-	"github.com/iotexproject/iotex-core/pkg/log"
+	slog "github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -625,7 +626,7 @@ func (p *Protocol) handleRestake(ctx context.Context, act *action.Restake, csm C
 func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.CandidateRegister, csm CandidateStateManager,
 ) (*receiptLog, []*action.TransactionLog, error) {
 	if batch.NeedBreakBlockHeight() {
-		log.L().Error("handleCandidateRegister")
+		slog.L().Error("handleCandidateRegister")
 	}
 	actCtx := protocol.MustGetActionCtx(ctx)
 	blkCtx := protocol.MustGetBlockCtx(ctx)
@@ -633,8 +634,13 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 	log := newReceiptLog(p.addr.String(), HandleCandidateRegister, featureCtx.NewStakingReceiptFormat)
 
 	registrationFee := new(big.Int).Set(p.config.RegistrationConsts.Fee)
-
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("call fetchCaller")
+	}
 	caller, fetchErr := fetchCaller(ctx, csm, new(big.Int).Add(act.Amount(), registrationFee))
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("fetchCaller return err %v", fetchErr)
+	}
 	if fetchErr != nil {
 		return log, nil, fetchErr
 	}
@@ -643,9 +649,14 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 	if act.OwnerAddress() != nil {
 		owner = act.OwnerAddress()
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("GetByOwner %s", owner)
+	}
 	c := csm.GetByOwner(owner)
 	ownerExist := c != nil
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("ownerExist %v", ownerExist)
+	}
 	// cannot collide with existing owner (with selfstake != 0)
 	if ownerExist && c.SelfStake.Cmp(big.NewInt(0)) != 0 {
 		return log, nil, &handleError{
@@ -653,12 +664,18 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 			failureStatus: iotextypes.ReceiptStatus_ErrCandidateAlreadyExist,
 		}
 	}
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("ContainsName", zap.Any("act.Name", act.Name()), zap.Any("c", c), zap.Any("ownerExist", ownerExist))
+	}
 	// cannot collide with existing name
 	if csm.ContainsName(act.Name()) && (!ownerExist || act.Name() != c.Name) {
 		return log, nil, &handleError{
 			err:           ErrInvalidCanName,
 			failureStatus: iotextypes.ReceiptStatus_ErrCandidateConflict,
 		}
+	}
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("ContainsOperator act.OperatorAddress() = %s c= %v", act.OperatorAddress(), c)
 	}
 	// cannot collide with existing operator address
 	if csm.ContainsOperator(act.OperatorAddress()) &&
@@ -668,7 +685,9 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 			failureStatus: iotextypes.ReceiptStatus_ErrCandidateConflict,
 		}
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("NewVoteBucket owner=%s", owner)
+	}
 	bucket := NewVoteBucket(owner, owner, act.Amount(), act.Duration(), blkCtx.BlockTimeStamp, act.AutoStake())
 	bucketIdx, err := csm.putBucketAndIndex(bucket)
 	if err != nil {
@@ -685,7 +704,9 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 		SelfStakeBucketIdx: bucketIdx,
 		SelfStake:          act.Amount(),
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("Upsert")
+	}
 	if err := csm.Upsert(c); err != nil {
 		return log, nil, csmErrorToHandleError(owner.String(), err)
 	}
@@ -693,7 +714,9 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 	if p.needToWriteCandsMap(height) {
 		csm.DirtyView().candCenter.base.recordOwner(c)
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("DebitBucketPool")
+	}
 	// update bucket pool
 	if err := csm.DebitBucketPool(act.Amount(), true); err != nil {
 		return log, nil, &handleError{
@@ -701,7 +724,9 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 			failureStatus: iotextypes.ReceiptStatus_ErrWriteAccount,
 		}
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("SubBalance")
+	}
 	// update caller balance
 	if err := caller.SubBalance(act.Amount()); err != nil {
 		return log, nil, &handleError{
@@ -709,11 +734,16 @@ func (p *Protocol) handleCandidateRegister(ctx context.Context, act *action.Cand
 			failureStatus: iotextypes.ReceiptStatus_ErrNotEnoughBalance,
 		}
 	}
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("StoreAccount")
+	}
 	// put updated caller's account state to trie
 	if err := accountutil.StoreAccount(csm.SM(), actCtx.Caller, caller); err != nil {
 		return log, nil, errors.Wrapf(err, "failed to store account %s", actCtx.Caller.String())
 	}
-
+	if batch.NeedBreakBlockHeight() {
+		slog.L().Error("depositGas")
+	}
 	// put registrationFee to reward pool
 	if _, err = p.depositGas(ctx, csm.SM(), registrationFee); err != nil {
 		return log, nil, errors.Wrap(err, "failed to deposit gas")
@@ -824,8 +854,14 @@ func fetchCaller(ctx context.Context, csm CandidateStateManager, amount *big.Int
 	if protocol.MustGetFeatureCtx(ctx).CreateLegacyNonceAccount {
 		accountCreationOpts = append(accountCreationOpts, state.LegacyNonceAccountTypeOption())
 	}
+	if batch.NeedBreakBlockHeight() {
+		slog.S().Errorf("fetchCaller LoadAccount %s", actionCtx.Caller)
+	}
 	caller, err := accountutil.LoadAccount(csm.SM(), actionCtx.Caller, accountCreationOpts...)
 	if err != nil {
+		if batch.NeedBreakBlockHeight() {
+			slog.S().Errorf("fetchCaller LoadAccount error %s", err)
+		}
 		return nil, &handleError{
 			err:           errors.Wrapf(err, "failed to load the account of caller %s", actionCtx.Caller.String()),
 			failureStatus: iotextypes.ReceiptStatus_Failure,
@@ -834,6 +870,9 @@ func fetchCaller(ctx context.Context, csm CandidateStateManager, amount *big.Int
 	gasFee := big.NewInt(0).Mul(actionCtx.GasPrice, big.NewInt(0).SetUint64(actionCtx.IntrinsicGas))
 	// check caller's balance
 	if !caller.HasSufficientBalance(new(big.Int).Add(amount, gasFee)) {
+		if batch.NeedBreakBlockHeight() {
+			slog.S().Errorf("fetchCaller HasSufficientBalance balance not enough %s", actionCtx.Caller)
+		}
 		return nil, &handleError{
 			err:           errors.Wrapf(state.ErrNotEnoughBalance, "caller %s balance not enough", actionCtx.Caller.String()),
 			failureStatus: iotextypes.ReceiptStatus_ErrNotEnoughBalance,
