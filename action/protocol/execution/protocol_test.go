@@ -1295,3 +1295,7 @@ func BenchmarkHotContract(b *testing.B) {
 		benchmarkHotContractWithStateDB(b, false)
 	})
 }
+
+func TestErrWriteProtection(t *testing.T) {
+	NewSmartContractTest(t, "testdata-london/write-protection.json")
+}
