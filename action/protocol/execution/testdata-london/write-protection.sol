@@ -22,13 +22,23 @@ contract A {
     address public sender;
     uint public value;
     address private c;
+    mapping(uint => uint) private _a;
     event Success(bool);
 
     function make() public {
         c = address(new B());
+        _a[1] = 1;
+        _a[2] = 2;
     }
 
     function callStatic(address _contract,uint _num) public {
+        if (_num == 0) {
+            _contract.call(
+                abi.encodeWithSignature("notfund()")
+            );
+            delete _a[1];
+            delete _a[2];
+        }
         (bool success, bytes memory _) = _contract.staticcall(
             abi.encodeWithSignature("setVars(uint256)", _num)
         );
@@ -46,7 +56,7 @@ contract A {
         } catch {
             this.callStatic(_contract,1);
         }
- 
+
         return 1;
     }
 }
