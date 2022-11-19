@@ -37,15 +37,15 @@ contract A {
             _contract.call(
                 abi.encodeWithSignature("notfund()")
             );
-            LOG(0);
+            emit LOG(0);
             _contract.call(
                 abi.encodeWithSignature("notfund2()")
             );
-            LOG(1);
+            emit LOG(1);
             _contract.call(
                 abi.encodeWithSignature("notfund3()")
             );
-            LOG(2);
+            emit LOG(2);
         }
         if (_num < 2) {
             delete _a[1];
