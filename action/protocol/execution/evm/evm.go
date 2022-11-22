@@ -369,7 +369,7 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 	config.Debug = true
 	config.Tracer = logger.NewJSONLogger(&logger.Config{
 		Debug:        true,
-		EnableMemory: true,
+		EnableMemory: false,
 	}, os.Stdout)
 	evm := vm.NewEVM(evmParams.context, evmParams.txCtx, stateDB, chainConfig, config)
 	if g.IsOkhotsk(blockHeight) {
