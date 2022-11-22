@@ -9,13 +9,16 @@ package evm
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -363,6 +366,11 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 		config = vmCfg
 	}
 	chainConfig := getChainConfig(g, blockHeight, evmParams.evmNetworkID)
+	config.Debug = true
+	config.Tracer = logger.NewJSONLogger(&logger.Config{
+		Debug:        true,
+		EnableMemory: true,
+	}, os.Stdout)
 	evm := vm.NewEVM(evmParams.context, evmParams.txCtx, stateDB, chainConfig, config)
 	if g.IsOkhotsk(blockHeight) {
 		accessList = evmParams.accessList
@@ -430,6 +438,9 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 		currentRefund          = stateDB.GetRefund()
 		featureCtx             = protocol.MustGetFeatureCtx(ctx)
 	)
+	if evmErr != nil {
+		fmt.Println("evmErr", evmErr, "featureCtx.CorrectGasRefund", featureCtx.CorrectGasRefund, "refundBeforeDynamicGas", refundBeforeDynamicGas, "currentRefund", currentRefund)
+	}
 	if evmErr != nil && !featureCtx.CorrectGasRefund && evm.HitErrWriteProtection && refundBeforeDynamicGas != currentRefund {
 		if refundBeforeDynamicGas > currentRefund {
 			stateDB.AddRefund(refundBeforeDynamicGas - currentRefund)

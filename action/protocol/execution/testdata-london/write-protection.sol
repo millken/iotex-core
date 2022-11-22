@@ -24,12 +24,12 @@ contract A {
     address private c;
     mapping(uint => uint) private _a;
     event Success(bool);
-    event LOG(uint);
 
     function make() public {
         c = address(new B());
         _a[1] = 1;
         _a[2] = 2;
+        _a[3] = 3;
     }
 
     function callStatic(address _contract,uint _num) public {
@@ -37,27 +37,25 @@ contract A {
             _contract.call(
                 abi.encodeWithSignature("notfund()")
             );
-            emit LOG(0);
-            _contract.call(
-                abi.encodeWithSignature("notfund2()")
-            );
-            emit LOG(1);
-            _contract.call(
-                abi.encodeWithSignature("notfund3()")
-            );
-            emit LOG(2);
-        }
-        if (_num < 2) {
             delete _a[1];
             delete _a[2];
-            (bool success, bytes memory _) = _contract.staticcall(
-                abi.encodeWithSignature("setVars(uint256)", _num)
-            );
-         emit Success(success);
-       }
-        if (_num < 2) {
+        }
+        if (_num == 1) {
+            delete _a[3];
+        }
+        (bool success, bytes memory _) = _contract.staticcall(
+            abi.encodeWithSignature("setVars(uint256)", _num)
+        );
+        emit Success(success);
+        if (_num == 0) {
             revert();
         }
+        if (_num == 1) {
+            selfdestruct(address(0));
+        }
+        // 0x0000000000000000000000000000000000000000.call(
+        //     abi.encodeWithSignature("notfund()")
+        // );
     }
 
     function setVars(address _contract, uint _num) public returns (uint256) {
@@ -66,10 +64,7 @@ contract A {
         }
         try this.callStatic(_contract,0) {
         } catch {
-            try this.callStatic(_contract,1) {
-            }catch{
-                this.callStatic(_contract,2);
-            }
+            this.callStatic(_contract,1);
         }
 
         return 1;
