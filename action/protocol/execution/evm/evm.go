@@ -9,7 +9,6 @@ package evm
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"math/big"
 	"os"
@@ -434,18 +433,14 @@ func executeInEVM(ctx context.Context, evmParams *Params, stateDB *StateDBAdapte
 	// has caused gas refund to change, which needs to be manually adjusted after
 	// the tx is reverted. After Okhotsk height, it is fixed inside RevertToSnapshot()
 	var (
-		refundBeforeDynamicGas = evm.RefundBeforeDynamicGas
-		currentRefund          = stateDB.GetRefund()
-		featureCtx             = protocol.MustGetFeatureCtx(ctx)
+		deltaRefundByDynamicGas = evm.DeltaRefundByDynamicGas
+		featureCtx              = protocol.MustGetFeatureCtx(ctx)
 	)
-	if evmErr != nil {
-		fmt.Println("evmErr", evmErr, "featureCtx.CorrectGasRefund", featureCtx.CorrectGasRefund, "refundBeforeDynamicGas", refundBeforeDynamicGas, "currentRefund", currentRefund)
-	}
-	if evmErr != nil && !featureCtx.CorrectGasRefund && evm.HitErrWriteProtection && refundBeforeDynamicGas != currentRefund {
-		if refundBeforeDynamicGas > currentRefund {
-			stateDB.AddRefund(refundBeforeDynamicGas - currentRefund)
+	if evmErr != nil && !featureCtx.CorrectGasRefund && deltaRefundByDynamicGas != 0 {
+		if deltaRefundByDynamicGas > 0 {
+			stateDB.AddRefund(uint64(deltaRefundByDynamicGas))
 		} else {
-			stateDB.SubRefund(currentRefund - refundBeforeDynamicGas)
+			stateDB.SubRefund(uint64(-deltaRefundByDynamicGas))
 		}
 	}
 	if refund > stateDB.GetRefund() {
