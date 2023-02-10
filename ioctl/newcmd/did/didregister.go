@@ -1,17 +1,14 @@
 // Copyright (c) 2022 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package did
 
 import (
 	"encoding/hex"
 	"math/big"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -23,12 +20,12 @@ import (
 // Multi-language support
 var (
 	_registerCmdUses = map[config.Language]string{
-		config.English: "register (CONTRACT_ADDRESS|ALIAS) hash uri",
-		config.Chinese: "register (合约地址|别名) hash uri",
+		config.English: "register (CONTRACT_ADDRESS|ALIAS) hash uri [-s SIGNER] [-n NONCE] [-l GAS_LIMIT] [-p GAS_PRICE] [-P PASSWORD] [-y]",
+		config.Chinese: "register (合约地址|别名) hash uri [-s 签署人] [-n NONCE] [-l GAS限制] [-P GAS价格] [-P 密码] [-y]",
 	}
 	_registerCmdShorts = map[config.Language]string{
 		config.English: "Register DID on IoTeX blockchain",
-		config.Chinese: "Register 在IoTeX链上注册DID",
+		config.Chinese: "在IoTeX链上注册DID",
 	}
 )
 
@@ -47,22 +44,10 @@ func NewDidRegisterCmd(client ioctl.Client) *cobra.Command {
 			if err != nil {
 				return errors.Wrap(err, "failed to get contract address")
 			}
-
-			hashSlice, err := hex.DecodeString(args[1])
+			bytecode, err := encode(_registerDIDName, args[1], args[2])
 			if err != nil {
 				return errors.Wrap(err, "failed to decode data")
 			}
-			var hashArray [32]byte
-			copy(hashArray[:], hashSlice)
-			abi, err := abi.JSON(strings.NewReader(DIDABI))
-			if err != nil {
-				return errors.Wrap(err, "falied to parse abi")
-			}
-			bytecode, err := abi.Pack(_registerDIDName, hashArray, []byte(args[2]))
-			if err != nil {
-				return errors.Wrap(err, "invalid bytecode")
-			}
-
 			gasPrice, signer, password, nonce, gasLimit, assumeYes, err := action.GetWriteCommandFlag(cmd)
 			if err != nil {
 				return err
@@ -72,4 +57,14 @@ func NewDidRegisterCmd(client ioctl.Client) *cobra.Command {
 	}
 	action.RegisterWriteCommand(client, cmd)
 	return cmd
+}
+
+func encode(method, didHash, uri string) ([]byte, error) {
+	hashSlice, err := hex.DecodeString(didHash)
+	if err != nil {
+		return nil, err
+	}
+	var hashArray [32]byte
+	copy(hashArray[:], hashSlice)
+	return _didABI.Pack(method, hashArray, []byte(uri))
 }

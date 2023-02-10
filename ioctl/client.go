@@ -1,8 +1,7 @@
 // Copyright (c) 2022 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package ioctl
 
@@ -36,6 +35,11 @@ import (
 
 const (
 	_urlPattern = `[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`
+)
+
+var (
+	//ErrInvalidEndpointOrInsecure represents that endpoint or insecure is invalid
+	ErrInvalidEndpointOrInsecure = errors.New("check endpoint or secureConnect in ~/.config/ioctl/default/config.default or cmd flag value if has")
 )
 
 type (

@@ -1,8 +1,7 @@
 // Copyright (c) 2019 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package mptrie
 
@@ -39,6 +38,9 @@ func newLeafNode(
 			return nil, err
 		}
 	}
+	if err := logNode(_nodeTypeLeaf, _actionTypeNew, l, cli); err != nil {
+		return nil, err
+	}
 	return l, nil
 }
 
@@ -52,6 +54,9 @@ func newLeafNodeFromProtoPb(pb *triepb.LeafPb, hashVal []byte) *leafNode {
 		value: pb.Value,
 	}
 	l.cacheNode.serializable = l
+	if err := logNode(_nodeTypeLeaf, _actionTypeNew, l, nil); err != nil {
+		panic(err)
+	}
 	return l
 }
 
@@ -64,6 +69,9 @@ func (l *leafNode) Value() []byte {
 }
 
 func (l *leafNode) Delete(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeLeaf, _actionTypeDelete, l, cli); err != nil {
+		return nil, err
+	}
 	if !bytes.Equal(l.key[offset:], key[offset:]) {
 		return nil, trie.ErrNotExist
 	}
@@ -71,6 +79,9 @@ func (l *leafNode) Delete(cli client, key keyType, offset uint8) (node, error) {
 }
 
 func (l *leafNode) Upsert(cli client, key keyType, offset uint8, value []byte) (node, error) {
+	if err := logNode(_nodeTypeLeaf, _actionTypeUpsert, l, cli); err != nil {
+		return nil, err
+	}
 	matched := commonPrefixLength(l.key[offset:], key[offset:])
 	if offset+matched == uint8(len(key)) {
 		if err := l.delete(cli); err != nil {
@@ -107,7 +118,10 @@ func (l *leafNode) Upsert(cli client, key keyType, offset uint8, value []byte) (
 	return newExtensionNode(cli, l.key[offset:offset+matched], bnode)
 }
 
-func (l *leafNode) Search(_ client, key keyType, offset uint8) (node, error) {
+func (l *leafNode) Search(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeLeaf, _actionTypeSearch, l, cli); err != nil {
+		return nil, err
+	}
 	if !bytes.Equal(l.key[offset:], key[offset:]) {
 		return nil, trie.ErrNotExist
 	}

@@ -1,8 +1,7 @@
 // Copyright (c) 2019 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package mptrie
 
@@ -39,6 +38,9 @@ func newExtensionNode(
 			return nil, err
 		}
 	}
+	if err := logNode(_nodeTypeExtension, _actionTypeNew, e, cli); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
@@ -52,10 +54,16 @@ func newExtensionNodeFromProtoPb(pb *triepb.ExtendPb, hashVal []byte) *extension
 		child: newHashNode(pb.Value),
 	}
 	e.cacheNode.serializable = e
+	if err := logNode(_nodeTypeExtension, _actionTypeNew, e, nil); err != nil {
+		panic(err)
+	}
 	return e
 }
 
 func (e *extensionNode) Delete(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeExtension, _actionTypeDelete, e, cli); err != nil {
+		return nil, err
+	}
 	matched := e.commonPrefixLength(key[offset:])
 	if matched != uint8(len(e.path)) {
 		return nil, trie.ErrNotExist
@@ -86,6 +94,9 @@ func (e *extensionNode) Delete(cli client, key keyType, offset uint8) (node, err
 }
 
 func (e *extensionNode) Upsert(cli client, key keyType, offset uint8, value []byte) (node, error) {
+	if err := logNode(_nodeTypeExtension, _actionTypeUpsert, e, cli); err != nil {
+		return nil, err
+	}
 	matched := e.commonPrefixLength(key[offset:])
 	if matched == uint8(len(e.path)) {
 		newChild, err := e.child.Upsert(cli, key, offset+matched, value)
@@ -121,6 +132,9 @@ func (e *extensionNode) Upsert(cli client, key keyType, offset uint8, value []by
 }
 
 func (e *extensionNode) Search(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeExtension, _actionTypeSearch, e, cli); err != nil {
+		return nil, err
+	}
 	matched := e.commonPrefixLength(key[offset:])
 	if matched != uint8(len(e.path)) {
 		return nil, trie.ErrNotExist

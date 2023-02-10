@@ -1,8 +1,7 @@
 // Copyright (c) 2019 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package mptrie
 
@@ -47,6 +46,9 @@ func newBranchNode(
 			}
 		}
 	}
+	if err := logNode(_nodeTypeBranch, _actionTypeNew, bnode, cli); err != nil {
+		return nil, err
+	}
 	return bnode, nil
 }
 
@@ -70,6 +72,9 @@ func newRootBranchNode(cli client, children map[byte]node, indices *SortedList, 
 			}
 		}
 	}
+	if err := logNode(_nodeTypeBranch, _actionTypeNew, bnode, cli); err != nil {
+		return nil, err
+	}
 	return bnode, nil
 }
 
@@ -86,6 +91,9 @@ func newBranchNodeFromProtoPb(pb *triepb.BranchPb, hashVal []byte) *branchNode {
 	}
 	bnode.indices = NewSortedList(bnode.children)
 	bnode.cacheNode.serializable = bnode
+	if err := logNode(_nodeTypeBranch, _actionTypeNew, bnode, nil); err != nil {
+		panic(err)
+	}
 	return bnode
 }
 
@@ -102,6 +110,9 @@ func (b *branchNode) Children() []node {
 }
 
 func (b *branchNode) Delete(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeBranch, _actionTypeDelete, b, cli); err != nil {
+		return nil, err
+	}
 	offsetKey := key[offset]
 	child, err := b.child(offsetKey)
 	if err != nil {
@@ -155,6 +166,9 @@ func (b *branchNode) Delete(cli client, key keyType, offset uint8) (node, error)
 }
 
 func (b *branchNode) Upsert(cli client, key keyType, offset uint8, value []byte) (node, error) {
+	if err := logNode(_nodeTypeBranch, _actionTypeUpsert, b, cli); err != nil {
+		return nil, err
+	}
 	var newChild node
 	offsetKey := key[offset]
 	child, err := b.child(offsetKey)
@@ -172,6 +186,9 @@ func (b *branchNode) Upsert(cli client, key keyType, offset uint8, value []byte)
 }
 
 func (b *branchNode) Search(cli client, key keyType, offset uint8) (node, error) {
+	if err := logNode(_nodeTypeBranch, _actionTypeSearch, b, cli); err != nil {
+		return nil, err
+	}
 	child, err := b.child(key[offset])
 	if err != nil {
 		return nil, err

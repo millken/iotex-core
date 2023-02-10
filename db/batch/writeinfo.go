@@ -1,8 +1,7 @@
 // Copyright (c) 2019 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package batch
 
@@ -86,18 +85,21 @@ func (wi *WriteInfo) Error() string {
 
 // Serialize serializes the write info
 func (wi *WriteInfo) Serialize() []byte {
-	bytes := []byte{byte(wi.writeType)}
-	bytes = append(bytes, []byte(wi.namespace)...)
-	bytes = append(bytes, wi.key...)
-	bytes = append(bytes, wi.value...)
+	lenNamespace, lenKey, lenValue := len(wi.namespace), len(wi.key), len(wi.value)
+	bytes := make([]byte, 1+lenNamespace+lenKey+lenValue)
+	bytes[0] = byte(wi.writeType)
+	copy(bytes[1:], []byte(wi.namespace))
+	copy(bytes[1+lenNamespace:], wi.key)
+	copy(bytes[1+lenNamespace+lenKey:], wi.value)
 	return bytes
 }
 
 // SerializeWithoutWriteType serializes the write info without write type
 func (wi *WriteInfo) SerializeWithoutWriteType() []byte {
-	bytes := make([]byte, 0)
-	bytes = append(bytes, []byte(wi.namespace)...)
-	bytes = append(bytes, wi.key...)
-	bytes = append(bytes, wi.value...)
+	lenNamespace, lenKey, lenValue := len(wi.namespace), len(wi.key), len(wi.value)
+	bytes := make([]byte, lenNamespace+lenKey+lenValue)
+	copy(bytes[0:], []byte(wi.namespace))
+	copy(bytes[lenNamespace:], wi.key)
+	copy(bytes[lenNamespace+lenKey:], wi.value)
 	return bytes
 }

@@ -1,12 +1,13 @@
 // Copyright (c) 2020 IoTeX
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package mptrie
 
 import (
+	"errors"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,6 +25,9 @@ func (cn *cacheNode) Hash(cli client) ([]byte, error) {
 func (cn *cacheNode) hash(cli client, flush bool) ([]byte, error) {
 	if len(cn.hashVal) != 0 {
 		return cn.hashVal, nil
+	}
+	if cli == nil {
+		return []byte{}, errors.New("client cannot be nil")
 	}
 	pb, err := cn.proto(cli, flush)
 	if err != nil {

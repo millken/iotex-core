@@ -1,8 +1,7 @@
 // Copyright (c) 2019 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package protocol
 
@@ -109,6 +108,8 @@ type (
 		FixGasAndNonceUpdate                    bool
 		FixUnproductiveDelegates                bool
 		CorrectGasRefund                        bool
+		FixRewardErroCheckPosition              bool
+		EnableWeb3Rewarding                     bool
 	}
 
 	// FeatureWithHeightCtx provides feature check functions.
@@ -120,6 +121,7 @@ type (
 		StakingCorrectGas        CheckFunc
 		CalculateProbationList   CheckFunc
 		LoadCandidatesLegacy     CheckFunc
+		CandCenterHasAlias       CheckFunc
 	}
 )
 
@@ -242,6 +244,8 @@ func WithFeatureCtx(ctx context.Context) context.Context {
 			FixGasAndNonceUpdate:                    g.IsOkhotsk(height),
 			FixUnproductiveDelegates:                g.IsOkhotsk(height),
 			CorrectGasRefund:                        g.IsOkhotsk(height),
+			FixRewardErroCheckPosition:              g.IsOkhotsk(height),
+			EnableWeb3Rewarding:                     g.IsToBeEnabled(height),
 		},
 	)
 }
@@ -289,6 +293,9 @@ func WithFeatureWithHeightCtx(ctx context.Context) context.Context {
 			},
 			LoadCandidatesLegacy: func(height uint64) bool {
 				return !g.IsEaster(height)
+			},
+			CandCenterHasAlias: func(height uint64) bool {
+				return !g.IsOkhotsk(height)
 			},
 		},
 	)

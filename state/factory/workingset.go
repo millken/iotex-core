@@ -1,8 +1,7 @@
 // Copyright (c) 2022 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package factory
 
@@ -11,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/iotexproject/go-pkgs/hash"
+	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -35,6 +35,8 @@ var (
 		},
 		[]string{"type"},
 	)
+
+	errUnsupportWeb3Rewarding = errors.New("unsupported web3 rewarding")
 )
 
 func init() {
@@ -108,9 +110,7 @@ func (ws *workingSet) runActions(
 		if err != nil {
 			return nil, errors.Wrap(err, "error when run action")
 		}
-		if receipt != nil {
-			receipts = append(receipts, receipt)
-		}
+		receipts = append(receipts, receipt)
 	}
 	if protocol.MustGetFeatureCtx(ctx).CorrectTxLogIndex {
 		updateReceiptIndex(receipts)
@@ -148,6 +148,9 @@ func (ws *workingSet) runAction(
 	if protocol.MustGetBlockCtx(ctx).GasLimit < protocol.MustGetActionCtx(ctx).IntrinsicGas {
 		return nil, action.ErrGasLimit
 	}
+	if !protocol.MustGetFeatureCtx(ctx).EnableWeb3Rewarding && isWeb3RewardingAction(elp) {
+		return nil, errUnsupportWeb3Rewarding
+	}
 	// Reject execution of chainID not equal the node's chainID
 	if err := validateChainID(ctx, elp.ChainID()); err != nil {
 		return nil, err
@@ -155,30 +158,27 @@ func (ws *workingSet) runAction(
 	// Handle action
 	reg, ok := protocol.GetRegistry(ctx)
 	if !ok {
-		return nil, nil
+		return nil, errors.New("protocol is empty")
 	}
 	elpHash, err := elp.Hash()
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to get hash")
 	}
-	var receipt *action.Receipt
+	defer ws.ResetSnapshots()
 	for _, actionHandler := range reg.All() {
-		receipt, err = actionHandler.Handle(ctx, elp.Action(), ws)
+		receipt, err := actionHandler.Handle(ctx, elp.Action(), ws)
 		if err != nil {
-			err = errors.Wrapf(
+			return nil, errors.Wrapf(
 				err,
 				"error when action %x mutates states",
 				elpHash,
 			)
 		}
-		if receipt != nil || err != nil {
-			break
+		if receipt != nil {
+			return receipt, nil
 		}
 	}
-	ws.ResetSnapshots()
-
-	// TODO (zhi): return error if both receipt and err are nil
-	return receipt, err
+	return nil, errors.New("receipt is empty")
 }
 
 func validateChainID(ctx context.Context, chainID uint32) error {
@@ -216,10 +216,14 @@ func (ws *workingSet) ResetSnapshots() {
 
 // Commit persists all changes in RunActions() into the DB
 func (ws *workingSet) Commit(ctx context.Context) error {
+	if err := protocolPreCommit(ctx, ws); err != nil {
+		return err
+	}
 	if err := ws.store.Commit(); err != nil {
 		return err
 	}
 	if err := protocolCommit(ctx, ws); err != nil {
+		// TODO (zhi): wrap the error and eventually panic it in caller side
 		return err
 	}
 	ws.Reset()
@@ -459,7 +463,7 @@ func (ws *workingSet) pickAndRunActions(
 			switch errors.Cause(err) {
 			case nil:
 				// do nothing
-			case action.ErrChainID:
+			case action.ErrChainID, errUnsupportWeb3Rewarding:
 				continue
 			case action.ErrGasLimit:
 				actionIterator.PopAccount()
@@ -471,11 +475,9 @@ func (ws *workingSet) pickAndRunActions(
 				}
 				return nil, errors.Wrapf(err, "Failed to update state changes for selp %x", nextActionHash)
 			}
-			if receipt != nil {
-				blkCtx.GasLimit -= receipt.GasConsumed
-				ctxWithBlockContext = protocol.WithBlockCtx(ctx, blkCtx)
-				receipts = append(receipts, receipt)
-			}
+			blkCtx.GasLimit -= receipt.GasConsumed
+			ctxWithBlockContext = protocol.WithBlockCtx(ctx, blkCtx)
+			receipts = append(receipts, receipt)
 			executedActions = append(executedActions, nextAction)
 
 			// To prevent loop all actions in act_pool, we stop processing action when remaining gas is below
@@ -495,9 +497,7 @@ func (ws *workingSet) pickAndRunActions(
 		if err != nil {
 			return nil, err
 		}
-		if receipt != nil {
-			receipts = append(receipts, receipt)
-		}
+		receipts = append(receipts, receipt)
 		executedActions = append(executedActions, selp)
 	}
 	if protocol.MustGetFeatureCtx(ctx).CorrectTxLogIndex {
@@ -530,10 +530,11 @@ func (ws *workingSet) ValidateBlock(ctx context.Context, blk *block.Block) error
 		return err
 	}
 	if !blk.VerifyDeltaStateDigest(digest) {
-		return block.ErrDeltaStateMismatch
+		return errors.Wrapf(block.ErrDeltaStateMismatch, "digest in block '%x' vs digest in workingset '%x'", blk.DeltaStateDigest(), digest)
 	}
-	if !blk.VerifyReceiptRoot(calculateReceiptRoot(ws.receipts)) {
-		return block.ErrReceiptRootMismatch
+	receiptRoot := calculateReceiptRoot(ws.receipts)
+	if !blk.VerifyReceiptRoot(receiptRoot) {
+		return errors.Wrapf(block.ErrReceiptRootMismatch, "receipt root in block '%x' vs receipt root in workingset '%x'", blk.ReceiptRoot(), receiptRoot)
 	}
 
 	return nil
@@ -571,4 +572,17 @@ func (ws *workingSet) CreateBuilder(
 		SetReceiptRoot(calculateReceiptRoot(ws.receipts)).
 		SetLogsBloom(calculateLogsBloom(ctx, ws.receipts))
 	return blkBuilder, nil
+}
+
+func isWeb3RewardingAction(selp action.SealedEnvelope) bool {
+	if selp.Encoding() != uint32(iotextypes.Encoding_ETHEREUM_RLP) {
+		return false
+	}
+	switch selp.Action().(type) {
+	case *action.ClaimFromRewardingFund,
+		*action.DepositToRewardingFund:
+		return true
+	default:
+		return false
+	}
 }

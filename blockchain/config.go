@@ -1,8 +1,7 @@
 // Copyright (c) 2022 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package blockchain
 
@@ -28,6 +27,7 @@ type (
 		ChainDBPath            string           `yaml:"chainDBPath"`
 		TrieDBPatchFile        string           `yaml:"trieDBPatchFile"`
 		TrieDBPath             string           `yaml:"trieDBPath"`
+		StakingPatchDir        string           `yaml:"stakingPatchDir"`
 		IndexDBPath            string           `yaml:"indexDBPath"`
 		BloomfilterIndexDBPath string           `yaml:"bloomfilterIndexDBPath"`
 		CandidateIndexDBPath   string           `yaml:"candidateIndexDBPath"`
@@ -67,6 +67,8 @@ type (
 		WorkingSetCacheSize uint64 `yaml:"workingSetCacheSize"`
 		// StreamingBlockBufferSize
 		StreamingBlockBufferSize uint64 `yaml:"streamingBlockBufferSize"`
+		// PersistStakingPatchBlock is the block to persist staking patch
+		PersistStakingPatchBlock uint64 `yaml:"persistStakingPatchBlock"`
 	}
 )
 
@@ -76,6 +78,7 @@ var (
 		ChainDBPath:            "/var/data/chain.db",
 		TrieDBPatchFile:        "/var/data/trie.db.patch",
 		TrieDBPath:             "/var/data/trie.db",
+		StakingPatchDir:        "/var/data",
 		IndexDBPath:            "/var/data/index.db",
 		BloomfilterIndexDBPath: "/var/data/bloomfilter.index.db",
 		CandidateIndexDBPath:   "/var/data/candidate.index.db",
@@ -103,6 +106,7 @@ var (
 		StateDBCacheSize:              1000,
 		WorkingSetCacheSize:           20,
 		StreamingBlockBufferSize:      200,
+		PersistStakingPatchBlock:      19778037,
 	}
 
 	// ErrConfig config error

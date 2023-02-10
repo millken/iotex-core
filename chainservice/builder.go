@@ -1,8 +1,7 @@
 // Copyright (c) 2022 IoTeX Foundation
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package chainservice
 
@@ -30,7 +29,9 @@ import (
 	"github.com/iotexproject/iotex-core/blocksync"
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/consensus"
+	rp "github.com/iotexproject/iotex-core/consensus/scheme/rolldpos"
 	"github.com/iotexproject/iotex-core/db"
+	"github.com/iotexproject/iotex-core/nodeinfo"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state/factory"
@@ -377,6 +378,12 @@ func (builder *Builder) createBlockchain(forSubChain, forTest bool) blockchain.B
 	return blockchain.NewBlockchain(builder.cfg.Chain, builder.cfg.Genesis, builder.cs.blockdao, factory.NewMinter(builder.cs.factory, builder.cs.actpool), chainOpts...)
 }
 
+func (builder *Builder) buildNodeInfoManager() {
+	dm := nodeinfo.NewInfoManager(&builder.cfg.NodeInfo, builder.cs.p2pAgent, builder.cs.chain, builder.cfg.Chain.ProducerPrivateKey())
+	builder.cs.nodeInfoManager = dm
+	builder.cs.lifecycle.Add(dm)
+}
+
 func (builder *Builder) buildBlockSyncer() error {
 	if builder.cs.blocksync != nil {
 		return nil
@@ -448,8 +455,13 @@ func (builder *Builder) registerStakingProtocol() error {
 	}
 	stakingProtocol, err := staking.NewProtocol(
 		rewarding.DepositGas,
-		builder.cfg.Genesis.Staking,
+		&staking.BuilderConfig{
+			Staking:                  builder.cfg.Genesis.Staking,
+			PersistStakingPatchBlock: builder.cfg.Chain.PersistStakingPatchBlock,
+			StakingPatchDir:          builder.cfg.Chain.StakingPatchDir,
+		},
 		builder.cs.candBucketsIndexer,
+		builder.cfg.Genesis.OkhotskBlockHeight,
 		builder.cfg.Genesis.GreenlandBlockHeight,
 		builder.cfg.Genesis.HawaiiBlockHeight,
 	)
@@ -553,7 +565,16 @@ func (builder *Builder) buildConsensusComponent() error {
 	}
 
 	// TODO: explorer dependency deleted at #1085, need to revive by migrating to api
-	component, err := consensus.NewConsensus(builder.cfg, builder.cs.chain, builder.cs.factory, copts...)
+	builderCfg := rp.BuilderConfig{
+		Chain:              builder.cfg.Chain,
+		Consensus:          builder.cfg.Consensus.RollDPoS,
+		Scheme:             builder.cfg.Consensus.Scheme,
+		DardanellesUpgrade: builder.cfg.DardanellesUpgrade,
+		DB:                 builder.cfg.DB,
+		Genesis:            builder.cfg.Genesis,
+		SystemActive:       builder.cfg.System.Active,
+	}
+	component, err := consensus.NewConsensus(builderCfg, builder.cs.chain, builder.cs.factory, copts...)
 	if err != nil {
 		return errors.Wrap(err, "failed to create consensus component")
 	}
@@ -608,6 +629,7 @@ func (builder *Builder) build(forSubChain, forTest bool) (*ChainService, error) 
 	if err := builder.buildBlockSyncer(); err != nil {
 		return nil, err
 	}
+	builder.buildNodeInfoManager()
 	cs := builder.cs
 	builder.cs = nil
 

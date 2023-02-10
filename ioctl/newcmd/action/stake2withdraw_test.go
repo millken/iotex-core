@@ -1,8 +1,7 @@
 // Copyright (c) 2022 IoTeX
-// This is an alpha (internal) release and is not suitable for production. This source code is provided 'as is' and no
-// warranties are given as to title or non-infringement, merchantability or fitness for purpose and, to the extent
-// permitted by law, all liability for your use of the code is disclaimed. This source code is governed by Apache
-// License 2.0 that can be found in the LICENSE file.
+// This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
+// or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
+// This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
 
 package action
 
@@ -47,7 +46,7 @@ func TestNewStake2WithdrawCmd(t *testing.T) {
 	client.EXPECT().Config().Return(config.Config{
 		Explorer: "iotexscan",
 		Endpoint: "testnet1",
-	}).Times(10)
+	}).AnyTimes()
 
 	accountResp := &iotexapi.GetAccountResponse{
 		AccountMeta: &iotextypes.AccountMeta{
@@ -119,7 +118,7 @@ func TestNewStake2WithdrawCmd(t *testing.T) {
 	t.Run("failed to get signed address", func(t *testing.T) {
 		expectedErr := errors.New("failed to get signed address")
 		client.EXPECT().AddressWithDefaultIfNotExist(gomock.Any()).Return("", expectedErr)
-		apiServiceClient.EXPECT().GetAccount(gomock.Any(), gomock.Any()).Return(accountResp, nil)
+		apiServiceClient.EXPECT().GetAccount(gomock.Any(), gomock.Any()).Return(accountResp, nil).AnyTimes()
 
 		cmd := NewStake2WithdrawCmd(client)
 		_, err = util.ExecuteCmd(cmd, "10", "--signer", accAddr.String())
