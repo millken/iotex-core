@@ -17,6 +17,7 @@ import (
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -124,6 +125,9 @@ func createAccount(sm protocol.StateManager, encodedAddr string, init *big.Int, 
 		}
 		if err := account.AddBalance(init); err != nil {
 			return errors.Wrapf(err, "failed to add balance %s", init)
+		}
+		if err := sql.StoreAccount(sm, addr, account); err != nil {
+			return err
 		}
 		if _, err := sm.PutState(account, protocol.LegacyKeyOption(addrHash)); err != nil {
 			return errors.Wrapf(err, "failed to put state for account %x", addrHash)
