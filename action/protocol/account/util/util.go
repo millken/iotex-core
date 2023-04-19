@@ -14,7 +14,6 @@ import (
 	"github.com/iotexproject/iotex-address/address"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
-	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/state"
 )
 
@@ -62,9 +61,6 @@ func LoadAccountByHash160(sr protocol.StateReader, addrHash hash.Hash160, opts .
 
 // StoreAccount puts updated account state to trie
 func StoreAccount(sm protocol.StateManager, addr address.Address, account *state.Account) error {
-	if err := sql.StoreAccount(sm, addr, account); err != nil {
-		return err
-	}
 	addrHash := hash.BytesToHash160(addr.Bytes())
 	_, err := sm.PutState(account, protocol.LegacyKeyOption(addrHash))
 	return err

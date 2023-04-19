@@ -16,6 +16,8 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding/rewardingpb"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
+	"github.com/iotexproject/iotex-core/db/sql"
+	"github.com/iotexproject/iotex-core/state"
 )
 
 // admin stores the admin data of the rewarding protocol
@@ -145,6 +147,14 @@ func (p *Protocol) CreateGenesisStates(
 	}
 
 	initBalance := g.InitBalance()
+	// Initialize the rewarding pool account
+	addr, _ := address.FromString(address.RewardingPoolAddr)
+	account := &state.Account{
+		Balance: initBalance,
+	}
+	if err := sql.StoreAccount(sm, addr, account); err != nil {
+		return err
+	}
 	if err := p.putState(
 		ctx,
 		sm,

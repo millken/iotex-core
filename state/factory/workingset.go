@@ -23,6 +23,7 @@ import (
 	"github.com/iotexproject/iotex-core/actpool"
 	"github.com/iotexproject/iotex-core/actpool/actioniterator"
 	"github.com/iotexproject/iotex-core/blockchain/block"
+	"github.com/iotexproject/iotex-core/db/sql"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
 )
@@ -269,6 +270,19 @@ func (ws *workingSet) PutState(s interface{}, opts ...protocol.StateOption) (uin
 	ss, err := state.Serialize(s)
 	if err != nil {
 		return ws.height, errors.Wrapf(err, "failed to convert account %v to bytes", s)
+	}
+	if cfg.Namespace == AccountKVNamespace {
+		addr, err := address.FromBytes(cfg.Key)
+		if err != nil {
+			return ws.height, err
+		}
+		acc := &state.Account{}
+		if err := state.Deserialize(acc, ss); err != nil {
+			return ws.height, err
+		}
+		if err := sql.StoreAccount(ws, addr, acc); err != nil {
+			return ws.height, err
+		}
 	}
 	return ws.height, ws.store.Put(cfg.Namespace, cfg.Key, ss)
 }
