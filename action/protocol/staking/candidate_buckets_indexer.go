@@ -11,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 
 	"github.com/iotexproject/iotex-core/db"
@@ -29,23 +28,19 @@ const (
 )
 
 var (
-	_candHeightKey        = []byte("cht")
-	_bucketHeightKey      = []byte("bht")
-	_latestCandidatesHash = []byte("lch")
-	_latestBucketsHash    = []byte("lbh")
+	_candHeightKey   = []byte("cht")
+	_bucketHeightKey = []byte("bht")
 )
 
 // CandidatesBucketsIndexer is an indexer to store candidates by given height
 type CandidatesBucketsIndexer struct {
 	latestCandidatesHeight uint64
 	latestBucketsHeight    uint64
-	latestCandidatesHash   hash.Hash160
-	latestBucketsHash      hash.Hash160
-	kvStore                db.KVStoreForRangeIndex
+	kvStore                KvVersioned
 }
 
 // NewStakingCandidatesBucketsIndexer creates a new StakingCandidatesIndexer
-func NewStakingCandidatesBucketsIndexer(kv db.KVStoreForRangeIndex) (*CandidatesBucketsIndexer, error) {
+func NewStakingCandidatesBucketsIndexer(kv KvVersioned) (*CandidatesBucketsIndexer, error) {
 	if kv == nil {
 		return nil, ErrMissingField
 	}
@@ -69,16 +64,6 @@ func (cbi *CandidatesBucketsIndexer) Start(ctx context.Context) error {
 		return err
 	}
 
-	ret, err = cbi.kvStore.Get(StakingMetaNamespace, _latestCandidatesHash)
-	switch errors.Cause(err) {
-	case nil:
-		cbi.latestCandidatesHash = hash.BytesToHash160(ret)
-	case db.ErrNotExist:
-		cbi.latestCandidatesHash = hash.ZeroHash160
-	default:
-		return err
-	}
-
 	ret, err = cbi.kvStore.Get(StakingMetaNamespace, _bucketHeightKey)
 	switch errors.Cause(err) {
 	case nil:
@@ -89,15 +74,6 @@ func (cbi *CandidatesBucketsIndexer) Start(ctx context.Context) error {
 		return err
 	}
 
-	ret, err = cbi.kvStore.Get(StakingMetaNamespace, _latestBucketsHash)
-	switch errors.Cause(err) {
-	case nil:
-		cbi.latestBucketsHash = hash.BytesToHash160(ret)
-	case db.ErrNotExist:
-		cbi.latestBucketsHash = hash.ZeroHash160
-	default:
-		return err
-	}
 	return nil
 }
 
@@ -107,14 +83,13 @@ func (cbi *CandidatesBucketsIndexer) Stop(ctx context.Context) error {
 }
 
 // PutCandidates puts candidates into indexer
-func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates *iotextypes.CandidateListV2) error {
-	candidatesBytes, err := proto.Marshal(candidates)
-	if err != nil {
-		return err
-	}
-
-	if err := cbi.putToIndexer(StakingCandidatesNamespace, height, candidatesBytes); err != nil {
-		return err
+func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates CandidateList) error {
+	for _, b := range candidates {
+		v, err := b.Serialize()
+		if err != nil {
+			return err
+		}
+		cbi.kvStore.PutOnlyOnChange(StakingCandidatesNamespace, b.Owner.Bytes(), v)
 	}
 	cbi.latestCandidatesHeight = height
 	return nil
@@ -150,15 +125,19 @@ func (cbi *CandidatesBucketsIndexer) GetCandidates(height uint64, offset, limit 
 }
 
 // PutBuckets puts vote buckets into indexer
-func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets *iotextypes.VoteBucketList) error {
-	bucketsBytes, err := proto.Marshal(buckets)
-	if err != nil {
-		return err
+func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets []*VoteBucket) error {
+	for _, b := range buckets {
+		v, err := b.Serialize()
+		if err != nil {
+			return err
+		}
+		k := &VoteBucketKey{
+			IsNative: b.isNative(),
+			Index:    b.Index,
+		}
+		cbi.kvStore.PutOnlyOnChange(StakingBucketsNamespace, k.Serialize(), v)
 	}
 
-	if err := cbi.putToIndexer(StakingBucketsNamespace, height, bucketsBytes); err != nil {
-		return err
-	}
 	cbi.latestBucketsHeight = height
 	return nil
 }
@@ -194,55 +173,36 @@ func (cbi *CandidatesBucketsIndexer) GetBuckets(height uint64, offset, limit uin
 
 func (cbi *CandidatesBucketsIndexer) putToIndexer(ns string, height uint64, data []byte) error {
 	var (
-		h          = hash.Hash160b(data)
-		dataExist  bool
-		heightKey  []byte
-		latestHash []byte
+		heightKey []byte
 	)
 	switch ns {
 	case StakingCandidatesNamespace:
-		dataExist = (h == cbi.latestCandidatesHash)
 		heightKey = _candHeightKey
-		latestHash = _latestCandidatesHash
 	case StakingBucketsNamespace:
-		dataExist = (h == cbi.latestBucketsHash)
 		heightKey = _bucketHeightKey
-		latestHash = _latestBucketsHash
 	default:
 		return ErrTypeAssertion
 	}
 
 	heightBytes := byteutil.Uint64ToBytesBigEndian(height)
-	if dataExist {
-		// same bytes already exist, do nothing
-		return cbi.kvStore.Put(StakingMetaNamespace, heightKey, heightBytes)
-	}
 
 	// update latest height
 	b := batch.NewBatch()
-	b.Put(ns, heightBytes, data, "failed to write data bytes")
 	b.Put(StakingMetaNamespace, heightKey, heightBytes, "failed to update indexer height")
-	b.Put(StakingMetaNamespace, latestHash, h[:], "failed to update latest hash")
 	if err := cbi.kvStore.WriteBatch(b); err != nil {
 		return err
-	}
-	// update latest hash
-	if ns == StakingCandidatesNamespace {
-		cbi.latestCandidatesHash = h
-	} else {
-		cbi.latestBucketsHash = h
 	}
 	return nil
 }
 
-func getFromIndexer(kv db.KVStoreForRangeIndex, ns string, height uint64) ([]byte, error) {
+func getFromIndexer(kv KvVersioned, ns string, height uint64) ([]byte, error) {
 	b, err := kv.Get(ns, byteutil.Uint64ToBytesBigEndian(height))
 	switch errors.Cause(err) {
 	case nil:
 		return b, nil
-	case db.ErrNotExist:
-		// height does not exist, fallback to previous height
-		return kv.SeekPrev([]byte(ns), height)
+	// case db.ErrNotExist:
+	// 	// height does not exist, fallback to previous height TODO: remove this fallback
+	// 	return kv.SeekPrev([]byte(ns), height)
 	default:
 		return nil, err
 	}

@@ -310,11 +310,8 @@ func (p *Protocol) handleStakingIndexer(epochStartHeight uint64, sm protocol.Sta
 	if err != nil && errors.Cause(err) != state.ErrStateNotExist {
 		return err
 	}
-	buckets, err := toIoTeXTypesVoteBucketList(allBuckets)
-	if err != nil {
-		return err
-	}
-	err = p.candBucketsIndexer.PutBuckets(epochStartHeight, buckets)
+	p.candBucketsIndexer.kvStore.SetVersion(epochStartHeight)
+	err = p.candBucketsIndexer.PutBuckets(epochStartHeight, allBuckets)
 	if err != nil {
 		return err
 	}
@@ -322,8 +319,7 @@ func (p *Protocol) handleStakingIndexer(epochStartHeight uint64, sm protocol.Sta
 	if err != nil && errors.Cause(err) != state.ErrStateNotExist {
 		return err
 	}
-	candidateList := toIoTeXTypesCandidateListV2(all)
-	return p.candBucketsIndexer.PutCandidates(epochStartHeight, candidateList)
+	return p.candBucketsIndexer.PutCandidates(epochStartHeight, all)
 }
 
 // PreCommit preforms pre-commit
