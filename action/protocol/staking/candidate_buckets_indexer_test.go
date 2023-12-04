@@ -23,7 +23,7 @@ func TestCandidatesBucketsIndexer_PutGetCandidates(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDB(cfg)
+	store := db.NewBoltDBVersioned(cfg)
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 	ctx := context.Background()
@@ -129,7 +129,6 @@ func TestCandidatesBucketsIndexer_PutGetCandidates(t *testing.T) {
 		}),
 	}
 	require.NoError(cbi.PutCandidates(height, candMax))
-	lcHash := cbi.latestCandidatesHash
 	r, _, err = cbi.GetCandidates(height, 0, 4)
 	require.NoError(err)
 	c, err := getFromIndexer(store, StakingCandidatesNamespace, height+1)
@@ -142,7 +141,6 @@ func TestCandidatesBucketsIndexer_PutGetCandidates(t *testing.T) {
 	// reopen db to read latest height and hash
 	require.NoError(cbi.Start(ctx))
 	require.Equal(height, cbi.latestCandidatesHeight)
-	require.Equal(lcHash, cbi.latestCandidatesHash)
 }
 
 func TestCandidatesBucketsIndexer_PutGetBuckets(t *testing.T) {
@@ -154,7 +152,7 @@ func TestCandidatesBucketsIndexer_PutGetBuckets(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDB(cfg)
+	store := db.NewBoltDBVersioned(cfg)
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 	ctx := context.Background()

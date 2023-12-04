@@ -256,7 +256,7 @@ func Test_CreatePreStatesWithRegisterProtocol(t *testing.T) {
 
 	cfg := db.DefaultConfig
 	cfg.DbPath = testPath
-	store := db.NewBoltDB(cfg)
+	store := db.NewBoltDBVersioned(cfg)
 	cbi, err := NewStakingCandidatesBucketsIndexer(store)
 	require.NoError(err)
 

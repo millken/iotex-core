@@ -36,11 +36,11 @@ var (
 type CandidatesBucketsIndexer struct {
 	latestCandidatesHeight uint64
 	latestBucketsHeight    uint64
-	kvStore                KvVersioned
+	kvStore                db.KvVersioned
 }
 
 // NewStakingCandidatesBucketsIndexer creates a new StakingCandidatesIndexer
-func NewStakingCandidatesBucketsIndexer(kv KvVersioned) (*CandidatesBucketsIndexer, error) {
+func NewStakingCandidatesBucketsIndexer(kv db.KvVersioned) (*CandidatesBucketsIndexer, error) {
 	if kv == nil {
 		return nil, ErrMissingField
 	}
@@ -83,13 +83,13 @@ func (cbi *CandidatesBucketsIndexer) Stop(ctx context.Context) error {
 }
 
 // PutCandidates puts candidates into indexer
-func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates CandidateList) error {
-	for _, b := range candidates {
-		v, err := b.Serialize()
+func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates *iotextypes.CandidateListV2) error {
+	for _, b := range candidates.GetCandidates() {
+		v, err := proto.Marshal(b)
 		if err != nil {
 			return err
 		}
-		cbi.kvStore.PutOnlyOnChange(StakingCandidatesNamespace, b.Owner.Bytes(), v)
+		cbi.kvStore.Put(StakingCandidatesNamespace, []byte(b.GetOwnerAddress()), v)
 	}
 	cbi.latestCandidatesHeight = height
 	return nil
@@ -125,17 +125,17 @@ func (cbi *CandidatesBucketsIndexer) GetCandidates(height uint64, offset, limit 
 }
 
 // PutBuckets puts vote buckets into indexer
-func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets []*VoteBucket) error {
-	for _, b := range buckets {
-		v, err := b.Serialize()
+func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets *iotextypes.VoteBucketList) error {
+	for _, b := range buckets.GetBuckets() {
+		v, err := proto.Marshal(b)
 		if err != nil {
 			return err
 		}
 		k := &VoteBucketKey{
-			IsNative: b.isNative(),
+			IsNative: b.GetContractAddress() == "",
 			Index:    b.Index,
 		}
-		cbi.kvStore.PutOnlyOnChange(StakingBucketsNamespace, k.Serialize(), v)
+		cbi.kvStore.Put(StakingBucketsNamespace, k.Serialize(), v)
 	}
 
 	cbi.latestBucketsHeight = height
@@ -195,7 +195,11 @@ func (cbi *CandidatesBucketsIndexer) putToIndexer(ns string, height uint64, data
 	return nil
 }
 
-func getFromIndexer(kv KvVersioned, ns string, height uint64) ([]byte, error) {
+func (cbi *CandidatesBucketsIndexer) GetKVStore() db.KvVersioned {
+	return cbi.kvStore
+}
+
+func getFromIndexer(kv db.KvVersioned, ns string, height uint64) ([]byte, error) {
 	b, err := kv.Get(ns, byteutil.Uint64ToBytesBigEndian(height))
 	switch errors.Cause(err) {
 	case nil:
