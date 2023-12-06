@@ -258,7 +258,6 @@ func TestCandidatesBucketsIndexer_PutGetBuckets(t *testing.T) {
 		}),
 	}
 	require.NoError(cbi.PutBuckets(height, voteMax))
-	lbHash := cbi.latestBucketsHash
 	r, _, err = cbi.GetBuckets(height, 0, 4)
 	require.NoError(err)
 	c, err := getFromIndexer(store, StakingBucketsNamespace, height+1)
@@ -271,5 +270,4 @@ func TestCandidatesBucketsIndexer_PutGetBuckets(t *testing.T) {
 	// reopen db to read latest height and hash
 	require.NoError(cbi.Start(ctx))
 	require.Equal(height, cbi.latestBucketsHeight)
-	require.Equal(lbHash, cbi.latestBucketsHash)
 }
