@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-election/committee"
 	"github.com/pkg/errors"
@@ -410,7 +411,11 @@ func (builder *Builder) createGateWayComponents(forTest bool) (
 	// create staking indexer
 	if builder.cfg.Chain.EnableStakingIndexer {
 		dbConfig.DbPath = builder.cfg.Chain.StakingIndexDBPath
-		candBucketsIndexer, err = staking.NewStakingCandidatesBucketsIndexer(db.NewMemoryDBVersioned())
+		candBucketsIndexer, err = staking.NewStakingCandidatesBucketsIndexer(db.NewBoltDBVersioned(
+			dbConfig, func(in []byte) []byte {
+				h := hash.Hash160b(in)
+				return h[:]
+			}, db.NonversionedNamespaceOption(staking.StakingMetaNamespace)))
 	}
 	return
 }

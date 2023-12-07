@@ -7,6 +7,7 @@ package staking
 
 import (
 	"context"
+	"encoding/binary"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -54,6 +55,12 @@ func (cbi *CandidatesBucketsIndexer) Start(ctx context.Context) error {
 	if err := cbi.kvStore.Start(ctx); err != nil {
 		return err
 	}
+	if err := cbi.kvStore.CreateVersionedNamespace(StakingCandidatesNamespace, 20); err != nil {
+		return err
+	}
+	if err := cbi.kvStore.CreateVersionedNamespace(StakingBucketsNamespace, 9); err != nil {
+		return err
+	}
 	ret, err := cbi.kvStore.Get(StakingMetaNamespace, _candHeightKey)
 	switch errors.Cause(err) {
 	case nil:
@@ -84,12 +91,19 @@ func (cbi *CandidatesBucketsIndexer) Stop(ctx context.Context) error {
 
 // PutCandidates puts candidates into indexer
 func (cbi *CandidatesBucketsIndexer) PutCandidates(height uint64, candidates *iotextypes.CandidateListV2) error {
+	kvb, err := db.NewKvVersionedWithBuffer(cbi.kvStore, batch.NewCachedBatch(), height)
+	if err != nil {
+		return err
+	}
 	for _, b := range candidates.GetCandidates() {
 		v, err := proto.Marshal(b)
 		if err != nil {
 			return err
 		}
-		cbi.kvStore.Put(StakingCandidatesNamespace, []byte(b.GetOwnerAddress()), v)
+		kvb.Put(StakingCandidatesNamespace, []byte(b.GetOwnerAddress()), v)
+	}
+	if err = kvb.Commit(); err != nil {
+		return err
 	}
 	cbi.latestCandidatesHeight = height
 	return nil
@@ -126,6 +140,10 @@ func (cbi *CandidatesBucketsIndexer) GetCandidates(height uint64, offset, limit 
 
 // PutBuckets puts vote buckets into indexer
 func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets *iotextypes.VoteBucketList) error {
+	kvb, err := db.NewKvVersionedWithBuffer(cbi.kvStore, batch.NewCachedBatch(), height)
+	if err != nil {
+		return err
+	}
 	for _, b := range buckets.GetBuckets() {
 		v, err := proto.Marshal(b)
 		if err != nil {
@@ -135,7 +153,10 @@ func (cbi *CandidatesBucketsIndexer) PutBuckets(height uint64, buckets *iotextyp
 			IsNative: b.GetContractAddress() == "",
 			Index:    b.Index,
 		}
-		cbi.kvStore.Put(StakingBucketsNamespace, k.Serialize(), v)
+		kvb.Put(StakingBucketsNamespace, k.Serialize(), v)
+	}
+	if err = kvb.Commit(); err != nil {
+		return err
 	}
 
 	cbi.latestBucketsHeight = height
@@ -205,9 +226,41 @@ func getFromIndexer(kv db.KvVersioned, ns string, height uint64) ([]byte, error)
 	case nil:
 		return b, nil
 	// case db.ErrNotExist:
-	// 	// height does not exist, fallback to previous height TODO: remove this fallback
+	// 	// height does not exist, fallback to previous height
 	// 	return kv.SeekPrev([]byte(ns), height)
 	default:
 		return nil, err
 	}
+}
+
+var (
+	ErrInvalidBucketKey = errors.New("invalid bucket key")
+)
+
+// VoteBucketKey is the key of vote bucket, which is used to store vote bucket
+type VoteBucketKey struct {
+	IsNative bool
+	Index    uint64
+}
+
+// Serialize serializes vote bucket key
+func (vbk *VoteBucketKey) Serialize() []byte {
+	buf := make([]byte, 9)
+	if vbk.IsNative {
+		buf[0] = 0
+	} else {
+		buf[0] = 1
+	}
+	binary.BigEndian.PutUint64(buf[1:], vbk.Index)
+	return buf
+}
+
+// Deserialize deserializes vote bucket key
+func (vbk *VoteBucketKey) Deserialize(buf []byte) error {
+	if len(buf) < 9 {
+		return ErrInvalidBucketKey
+	}
+	vbk.IsNative = buf[0] == 0
+	vbk.Index = binary.BigEndian.Uint64(buf[1:])
+	return nil
 }
