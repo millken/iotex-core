@@ -11,12 +11,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
@@ -74,6 +72,8 @@ var (
 	_unstakeMethod abi.Method
 	// _withdrawStakeMethod is the interface of the abi encoding of withdrawStake action
 	_withdrawStakeMethod abi.Method
+	_                    EthCompatibleAction = (*Unstake)(nil)
+	_                    EthCompatibleAction = (*WithdrawStake)(nil)
 )
 
 func init() {
@@ -212,17 +212,19 @@ func NewUnstakeFromABIBinary(data []byte) (*Unstake, error) {
 }
 
 // ToEthTx converts action to eth-compatible tx
-func (su *Unstake) ToEthTx() (*types.Transaction, error) {
-	addr, err := address.FromString(address.StakingProtocolAddr)
-	if err != nil {
-		return nil, err
-	}
-	ethAddr := common.BytesToAddress(addr.Bytes())
+func (su *Unstake) ToEthTx(_ uint32) (*types.Transaction, error) {
 	data, err := su.encodeABIBinary()
 	if err != nil {
 		return nil, err
 	}
-	return types.NewTransaction(su.Nonce(), ethAddr, big.NewInt(0), su.GasLimit(), su.GasPrice(), data), nil
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    su.Nonce(),
+		GasPrice: su.GasPrice(),
+		Gas:      su.GasLimit(),
+		To:       &_stakingProtocolEthAddr,
+		Value:    big.NewInt(0),
+		Data:     data,
+	}), nil
 }
 
 // WithdrawStake defines the action of stake withdraw
@@ -305,15 +307,17 @@ func NewWithdrawStakeFromABIBinary(data []byte) (*WithdrawStake, error) {
 }
 
 // ToEthTx converts action to eth-compatible tx
-func (sw *WithdrawStake) ToEthTx() (*types.Transaction, error) {
-	addr, err := address.FromString(address.StakingProtocolAddr)
-	if err != nil {
-		return nil, err
-	}
-	ethAddr := common.BytesToAddress(addr.Bytes())
+func (sw *WithdrawStake) ToEthTx(_ uint32) (*types.Transaction, error) {
 	data, err := sw.encodeABIBinary()
 	if err != nil {
 		return nil, err
 	}
-	return types.NewTransaction(sw.Nonce(), ethAddr, big.NewInt(0), sw.GasLimit(), sw.GasPrice(), data), nil
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    sw.Nonce(),
+		GasPrice: sw.GasPrice(),
+		Gas:      sw.GasLimit(),
+		To:       &_stakingProtocolEthAddr,
+		Value:    big.NewInt(0),
+		Data:     data,
+	}), nil
 }

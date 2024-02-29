@@ -62,7 +62,7 @@ func TestSealedEnvelope_InvalidType(t *testing.T) {
 		SetAction(r).
 		SetGasLimit(100000).Build()
 	selp := FakeSeal(elp, identityset.PrivateKey(27).PublicKey())
-	selp.encoding = iotextypes.Encoding_ETHEREUM_RLP
+	selp.encoding = iotextypes.Encoding_ETHEREUM_EIP155
 	hash1, err := selp.envelopeHash()
 	require.Equal(hash1, hash.ZeroHash256)
 	require.Contains(err.Error(), "invalid action type")
@@ -118,7 +118,7 @@ func TestSealedEnvelope_Actions(t *testing.T) {
 		selp := FakeSeal(elp, identityset.PrivateKey(27).PublicKey())
 		act, ok := selp.Action().(EthCompatibleAction)
 		require.True(ok)
-		rlp, err := act.ToEthTx()
+		rlp, err := act.ToEthTx(0)
 		require.NoError(err)
 
 		require.Equal(elp.Nonce(), rlp.Nonce())
@@ -141,14 +141,14 @@ func TestSealedEnvelope_Proto(t *testing.T) {
 	}
 	req.Equal(ac, proto)
 
-	se2 := SealedEnvelope{}
+	se2 := &SealedEnvelope{}
 	for _, v := range []struct {
 		encoding iotextypes.Encoding
 		sig      []byte
 		err      string
 	}{
 		{0, _signByte, "invalid signature length ="},
-		{3, _validSig, "unknown encoding type"},
+		{iotextypes.Encoding_ETHEREUM_UNPROTECTED + 1, _validSig, "unknown encoding type"},
 	} {
 		se.encoding = v.encoding
 		se.signature = v.sig
@@ -181,7 +181,7 @@ func TestSealedEnvelope_Proto(t *testing.T) {
 	}
 }
 
-func createSealedEnvelope(chainID uint32) (SealedEnvelope, error) {
+func createSealedEnvelope(chainID uint32) (*SealedEnvelope, error) {
 	tsf, _ := NewTransfer(
 		uint64(10),
 		unit.ConvertIotxToRau(1000+int64(10)),
@@ -200,7 +200,7 @@ func createSealedEnvelope(chainID uint32) (SealedEnvelope, error) {
 		SetChainID(chainID).Build()
 
 	cPubKey, err := crypto.HexStringToPublicKey(_publicKey)
-	se := SealedEnvelope{}
+	se := &SealedEnvelope{}
 	se.Envelope = evlp
 	se.srcPubkey = cPubKey
 	se.signature = _signByte

@@ -85,8 +85,8 @@ type (
 		Register(protocol.Protocol) error
 		Validate(context.Context, *block.Block) error
 		// NewBlockBuilder creates block builder
-		NewBlockBuilder(context.Context, actpool.ActPool, func(action.Envelope) (action.SealedEnvelope, error)) (*block.Builder, error)
-		SimulateExecution(context.Context, address.Address, *action.Execution, evm.GetBlockHash) ([]byte, *action.Receipt, error)
+		NewBlockBuilder(context.Context, actpool.ActPool, func(action.Envelope) (*action.SealedEnvelope, error)) (*block.Builder, error)
+		SimulateExecution(context.Context, address.Address, *action.Execution) ([]byte, *action.Receipt, error)
 		ReadContractStorage(context.Context, address.Address, []byte) ([]byte, error)
 		PutBlock(context.Context, *block.Block) error
 		DeleteTipBlock(context.Context, *block.Block) error
@@ -349,7 +349,7 @@ func (sf *factory) Validate(ctx context.Context, blk *block.Block) error {
 func (sf *factory) NewBlockBuilder(
 	ctx context.Context,
 	ap actpool.ActPool,
-	sign func(action.Envelope) (action.SealedEnvelope, error),
+	sign func(action.Envelope) (*action.SealedEnvelope, error),
 ) (*block.Builder, error) {
 	sf.mutex.Lock()
 	ctx = protocol.WithRegistry(ctx, sf.registry)
@@ -358,21 +358,17 @@ func (sf *factory) NewBlockBuilder(
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to obtain working set from state factory")
 	}
-	postSystemActions := make([]action.SealedEnvelope, 0)
-	for _, p := range sf.registry.All() {
-		if psac, ok := p.(protocol.PostSystemActionsCreator); ok {
-			elps, err := psac.CreatePostSystemActions(ctx, ws)
-			if err != nil {
-				return nil, err
-			}
-			for _, elp := range elps {
-				se, err := sign(elp)
-				if err != nil {
-					return nil, err
-				}
-				postSystemActions = append(postSystemActions, se)
-			}
+	postSystemActions := make([]*action.SealedEnvelope, 0)
+	unsignedSystemActions, err := ws.generateSystemActions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, elp := range unsignedSystemActions {
+		se, err := sign(elp)
+		if err != nil {
+			return nil, err
 		}
+		postSystemActions = append(postSystemActions, se)
 	}
 	blkBuilder, err := ws.CreateBuilder(ctx, ap, postSystemActions, sf.cfg.Chain.AllowedBlockGasResidue)
 	if err != nil {
@@ -391,7 +387,6 @@ func (sf *factory) SimulateExecution(
 	ctx context.Context,
 	caller address.Address,
 	ex *action.Execution,
-	getBlockHash evm.GetBlockHash,
 ) ([]byte, *action.Receipt, error) {
 	ctx, span := tracer.NewSpan(ctx, "factory.SimulateExecution")
 	defer span.End()
@@ -403,7 +398,7 @@ func (sf *factory) SimulateExecution(
 		return nil, nil, errors.Wrap(err, "failed to obtain working set from state factory")
 	}
 
-	return evm.SimulateExecution(ctx, ws, caller, ex, getBlockHash)
+	return evm.SimulateExecution(ctx, ws, caller, ex)
 }
 
 // ReadContractStorage reads contract's storage

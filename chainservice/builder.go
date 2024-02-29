@@ -11,11 +11,17 @@ import (
 	"time"
 
 	"github.com/iotexproject/iotex-address/address"
+	"github.com/iotexproject/iotex-election/committee"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/account"
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/execution"
+	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/action/protocol/poll"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
@@ -25,20 +31,21 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/blockchain/blockdao"
+	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/blockindex"
+	"github.com/iotexproject/iotex-core/blockindex/contractstaking"
 	"github.com/iotexproject/iotex-core/blocksync"
 	"github.com/iotexproject/iotex-core/config"
 	"github.com/iotexproject/iotex-core/consensus"
+	"github.com/iotexproject/iotex-core/consensus/consensusfsm"
 	rp "github.com/iotexproject/iotex-core/consensus/scheme/rolldpos"
 	"github.com/iotexproject/iotex-core/db"
 	"github.com/iotexproject/iotex-core/nodeinfo"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/log"
+	"github.com/iotexproject/iotex-core/pkg/util/blockutil"
+	"github.com/iotexproject/iotex-core/server/itx/nodestats"
 	"github.com/iotexproject/iotex-core/state/factory"
-	"github.com/iotexproject/iotex-election/committee"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 )
 
 // Builder is a builder to build chainservice
@@ -87,6 +94,13 @@ func (builder *Builder) SetBlockDAO(bd blockdao.BlockDAO) *Builder {
 func (builder *Builder) SetP2PAgent(agent p2p.Agent) *Builder {
 	builder.createInstance()
 	builder.cs.p2pAgent = agent
+	return builder
+}
+
+// SetRPCStats sets the RPCStats instance
+func (builder *Builder) SetRPCStats(stats *nodestats.APILocalStats) *Builder {
+	builder.createInstance()
+	builder.cs.apiStats = stats
 	return builder
 }
 
@@ -246,7 +260,20 @@ func (builder *Builder) buildBlockDAO(forTest bool) error {
 	}
 
 	var indexers []blockdao.BlockIndexer
-	indexers = append(indexers, builder.cs.factory)
+	// indexers in synchronizedIndexers will need to run PutBlock() one by one
+	// factory is dependent on sgdIndexer and contractStakingIndexer, so it should be put in the first place
+	synchronizedIndexers := []blockdao.BlockIndexer{builder.cs.factory}
+	if builder.cs.contractStakingIndexer != nil {
+		synchronizedIndexers = append(synchronizedIndexers, builder.cs.contractStakingIndexer)
+	}
+	if builder.cs.sgdIndexer != nil {
+		synchronizedIndexers = append(synchronizedIndexers, builder.cs.sgdIndexer)
+	}
+	if len(synchronizedIndexers) > 1 {
+		indexers = append(indexers, blockindex.NewSyncIndexers(synchronizedIndexers...))
+	} else {
+		indexers = append(indexers, builder.cs.factory)
+	}
 	if !builder.cfg.Chain.EnableAsyncIndexWrite && builder.cs.indexer != nil {
 		indexers = append(indexers, builder.cs.indexer)
 	}
@@ -262,6 +289,53 @@ func (builder *Builder) buildBlockDAO(forTest bool) error {
 		builder.cs.blockdao = blockdao.NewBlockDAO(indexers, dbConfig, deser)
 	}
 
+	return nil
+}
+
+func (builder *Builder) buildSGDRegistry(forTest bool) error {
+	if builder.cs.sgdIndexer != nil {
+		return nil
+	}
+	if forTest || builder.cfg.Genesis.SystemSGDContractAddress == "" {
+		builder.cs.sgdIndexer = nil
+		return nil
+	}
+	kvStore, err := db.CreateKVStoreWithCache(builder.cfg.DB, builder.cfg.Chain.SGDIndexDBPath, 1000)
+	if err != nil {
+		return err
+	}
+	builder.cs.sgdIndexer = blockindex.NewSGDRegistry(builder.cfg.Genesis.SystemSGDContractAddress, builder.cfg.Genesis.SystemSGDContractHeight, kvStore)
+	return nil
+}
+
+func (builder *Builder) buildContractStakingIndexer(forTest bool) error {
+	if !builder.cfg.Chain.EnableStakingProtocol {
+		return nil
+	}
+	if builder.cs.contractStakingIndexer != nil {
+		return nil
+	}
+	if forTest || builder.cfg.Genesis.SystemStakingContractAddress == "" {
+		builder.cs.contractStakingIndexer = nil
+		return nil
+	}
+	dbConfig := builder.cfg.DB
+	dbConfig.DbPath = builder.cfg.Chain.ContractStakingIndexDBPath
+	voteCalcConsts := builder.cfg.Genesis.VoteWeightCalConsts
+	indexer, err := contractstaking.NewContractStakingIndexer(
+		db.NewBoltDB(dbConfig),
+		contractstaking.Config{
+			ContractAddress:      builder.cfg.Genesis.SystemStakingContractAddress,
+			ContractDeployHeight: builder.cfg.Genesis.SystemStakingContractHeight,
+			CalculateVoteWeight: func(v *staking.VoteBucket) *big.Int {
+				return staking.CalculateVoteWeight(voteCalcConsts, v, false)
+			},
+			BlockInterval: builder.cfg.DardanellesUpgrade.BlockInterval,
+		})
+	if err != nil {
+		return err
+	}
+	builder.cs.contractStakingIndexer = indexer
 	return nil
 }
 
@@ -378,10 +452,34 @@ func (builder *Builder) createBlockchain(forSubChain, forTest bool) blockchain.B
 	return blockchain.NewBlockchain(builder.cfg.Chain, builder.cfg.Genesis, builder.cs.blockdao, factory.NewMinter(builder.cs.factory, builder.cs.actpool), chainOpts...)
 }
 
-func (builder *Builder) buildNodeInfoManager() {
-	dm := nodeinfo.NewInfoManager(&builder.cfg.NodeInfo, builder.cs.p2pAgent, builder.cs.chain, builder.cfg.Chain.ProducerPrivateKey())
+func (builder *Builder) buildNodeInfoManager() error {
+	cs := builder.cs
+	stk := staking.FindProtocol(cs.Registry())
+	if stk == nil {
+		return errors.New("cannot find staking protocol")
+	}
+	chain := builder.cs.chain
+	dm := nodeinfo.NewInfoManager(&builder.cfg.NodeInfo, cs.p2pAgent, cs.chain, builder.cfg.Chain.ProducerPrivateKey(), func() []string {
+		ctx := protocol.WithFeatureCtx(
+			protocol.WithBlockCtx(
+				genesis.WithGenesisContext(context.Background(), chain.Genesis()),
+				protocol.BlockCtx{BlockHeight: chain.TipHeight()},
+			),
+		)
+		candidates, err := stk.ActiveCandidates(ctx, cs.factory, 0)
+		if err != nil {
+			log.L().Error("failed to get active candidates", zap.Error(errors.WithStack(err)))
+			return nil
+		}
+		whiteList := make([]string, len(candidates))
+		for i := range whiteList {
+			whiteList[i] = candidates[i].Address
+		}
+		return whiteList
+	})
 	builder.cs.nodeInfoManager = dm
 	builder.cs.lifecycle.Add(dm)
+	return nil
 }
 
 func (builder *Builder) buildBlockSyncer() error {
@@ -453,6 +551,7 @@ func (builder *Builder) registerStakingProtocol() error {
 	if !builder.cfg.Chain.EnableStakingProtocol {
 		return nil
 	}
+
 	stakingProtocol, err := staking.NewProtocol(
 		rewarding.DepositGas,
 		&staking.BuilderConfig{
@@ -461,6 +560,7 @@ func (builder *Builder) registerStakingProtocol() error {
 			StakingPatchDir:          builder.cfg.Chain.StakingPatchDir,
 		},
 		builder.cs.candBucketsIndexer,
+		builder.cs.contractStakingIndexer,
 		builder.cfg.Genesis.OkhotskBlockHeight,
 		builder.cfg.Genesis.GreenlandBlockHeight,
 		builder.cfg.Genesis.HawaiiBlockHeight,
@@ -482,7 +582,7 @@ func (builder *Builder) registerAccountProtocol() error {
 }
 
 func (builder *Builder) registerExecutionProtocol() error {
-	return execution.NewProtocol(builder.cs.blockdao.GetBlockHash, rewarding.DepositGas).Register(builder.cs.registry)
+	return execution.NewProtocol(builder.cs.blockdao.GetBlockHash, rewarding.DepositGasWithSGD, builder.cs.sgdIndexer, builder.cs.blockTimeCalculator.CalculateBlockTime).Register(builder.cs.registry)
 }
 
 func (builder *Builder) registerRollDPoSProtocol() error {
@@ -500,6 +600,7 @@ func (builder *Builder) registerRollDPoSProtocol() error {
 	factory := builder.cs.factory
 	dao := builder.cs.blockdao
 	chain := builder.cs.chain
+	getBlockTime := builder.cs.blockTimeCalculator.CalculateBlockTime
 	pollProtocol, err := poll.NewProtocol(
 		builder.cfg.Consensus.Scheme,
 		builder.cfg.Chain,
@@ -520,7 +621,12 @@ func (builder *Builder) registerRollDPoSProtocol() error {
 				return nil, err
 			}
 
-			data, _, err := factory.SimulateExecution(ctx, addr, ex, dao.GetBlockHash)
+			// TODO: add depositGas
+			ctx = evm.WithHelperCtx(ctx, evm.HelperContext{
+				GetBlockHash: dao.GetBlockHash,
+				GetBlockTime: getBlockTime,
+			})
+			data, _, err := factory.SimulateExecution(ctx, addr, ex)
 
 			return data, err
 		},
@@ -542,12 +648,26 @@ func (builder *Builder) registerRollDPoSProtocol() error {
 		func(start, end uint64) (map[string]uint64, error) {
 			return blockchain.Productivity(chain, start, end)
 		},
-		builder.cs.blockdao.GetBlockHash,
+		dao.GetBlockHash,
+		getBlockTime,
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate poll protocol")
 	}
 	return pollProtocol.Register(builder.cs.registry)
+}
+
+func (builder *Builder) buildBlockTimeCalculator() (err error) {
+	consensusCfg := consensusfsm.NewConsensusConfig(builder.cfg.Consensus.RollDPoS.FSM, builder.cfg.DardanellesUpgrade, builder.cfg.Genesis, builder.cfg.Consensus.RollDPoS.Delay)
+	dao := builder.cs.BlockDAO()
+	builder.cs.blockTimeCalculator, err = blockutil.NewBlockTimeCalculator(consensusCfg.BlockInterval, builder.cs.Blockchain().TipHeight, func(height uint64) (time.Time, error) {
+		blk, err := dao.GetBlockByHeight(height)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return blk.Timestamp(), nil
+	})
+	return err
 }
 
 func (builder *Builder) buildConsensusComponent() error {
@@ -601,10 +721,19 @@ func (builder *Builder) build(forSubChain, forTest bool) (*ChainService, error) 
 	if err := builder.buildGatewayComponents(forTest); err != nil {
 		return nil, err
 	}
+	if err := builder.buildSGDRegistry(forTest); err != nil {
+		return nil, err
+	}
+	if err := builder.buildContractStakingIndexer(forTest); err != nil {
+		return nil, err
+	}
 	if err := builder.buildBlockDAO(forTest); err != nil {
 		return nil, err
 	}
 	if err := builder.buildBlockchain(forSubChain, forTest); err != nil {
+		return nil, err
+	}
+	if err := builder.buildBlockTimeCalculator(); err != nil {
 		return nil, err
 	}
 	// staking protocol need to be put in registry before poll protocol when enabling
@@ -629,7 +758,9 @@ func (builder *Builder) build(forSubChain, forTest bool) (*ChainService, error) 
 	if err := builder.buildBlockSyncer(); err != nil {
 		return nil, err
 	}
-	builder.buildNodeInfoManager()
+	if err := builder.buildNodeInfoManager(); err != nil {
+		return nil, err
+	}
 	cs := builder.cs
 	builder.cs = nil
 

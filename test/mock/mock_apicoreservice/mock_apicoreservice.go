@@ -6,8 +6,11 @@ package mock_apicoreservice
 
 import (
 	context "context"
+	big "math/big"
 	reflect "reflect"
+	time "time"
 
+	tracers "github.com/ethereum/go-ethereum/eth/tracers"
 	gomock "github.com/golang/mock/gomock"
 	hash "github.com/iotexproject/go-pkgs/hash"
 	address "github.com/iotexproject/iotex-address/address"
@@ -15,6 +18,7 @@ import (
 	logfilter "github.com/iotexproject/iotex-core/api/logfilter"
 	apitypes "github.com/iotexproject/iotex-core/api/types"
 	block "github.com/iotexproject/iotex-core/blockchain/block"
+	genesis "github.com/iotexproject/iotex-core/blockchain/genesis"
 	iotexapi "github.com/iotexproject/iotex-proto/golang/iotexapi"
 	iotextypes "github.com/iotexproject/iotex-proto/golang/iotextypes"
 )
@@ -74,10 +78,10 @@ func (mr *MockCoreServiceMockRecorder) Action(actionHash, checkPending interface
 }
 
 // ActionByActionHash mocks base method.
-func (m *MockCoreService) ActionByActionHash(h hash.Hash256) (action.SealedEnvelope, hash.Hash256, uint64, uint32, error) {
+func (m *MockCoreService) ActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, hash.Hash256, uint64, uint32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ActionByActionHash", h)
-	ret0, _ := ret[0].(action.SealedEnvelope)
+	ret0, _ := ret[0].(*action.SealedEnvelope)
 	ret1, _ := ret[1].(hash.Hash256)
 	ret2, _ := ret[2].(uint64)
 	ret3, _ := ret[3].(uint32)
@@ -122,10 +126,10 @@ func (mr *MockCoreServiceMockRecorder) ActionsByAddress(addr, start, count inter
 }
 
 // ActionsInActPool mocks base method.
-func (m *MockCoreService) ActionsInActPool(actHashes []string) ([]action.SealedEnvelope, error) {
+func (m *MockCoreService) ActionsInActPool(actHashes []string) ([]*action.SealedEnvelope, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ActionsInActPool", actHashes)
-	ret0, _ := ret[0].([]action.SealedEnvelope)
+	ret0, _ := ret[0].([]*action.SealedEnvelope)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -331,6 +335,20 @@ func (mr *MockCoreServiceMockRecorder) EstimateGasForNonExecution(arg0 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateGasForNonExecution", reflect.TypeOf((*MockCoreService)(nil).EstimateGasForNonExecution), arg0)
 }
 
+// Genesis mocks base method.
+func (m *MockCoreService) Genesis() genesis.Genesis {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Genesis")
+	ret0, _ := ret[0].(genesis.Genesis)
+	return ret0
+}
+
+// Genesis indicates an expected call of Genesis.
+func (mr *MockCoreServiceMockRecorder) Genesis() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockCoreService)(nil).Genesis))
+}
+
 // LogsInBlockByHash mocks base method.
 func (m *MockCoreService) LogsInBlockByHash(filter *logfilter.LogFilter, blockHash hash.Hash256) ([]*action.Log, error) {
 	m.ctrl.T.Helper()
@@ -360,6 +378,21 @@ func (m *MockCoreService) LogsInRange(filter *logfilter.LogFilter, start, end, p
 func (mr *MockCoreServiceMockRecorder) LogsInRange(filter, start, end, paginationSize interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogsInRange", reflect.TypeOf((*MockCoreService)(nil).LogsInRange), filter, start, end, paginationSize)
+}
+
+// PendingActionByActionHash mocks base method.
+func (m *MockCoreService) PendingActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PendingActionByActionHash", h)
+	ret0, _ := ret[0].(*action.SealedEnvelope)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PendingActionByActionHash indicates an expected call of PendingActionByActionHash.
+func (mr *MockCoreServiceMockRecorder) PendingActionByActionHash(h interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PendingActionByActionHash", reflect.TypeOf((*MockCoreService)(nil).PendingActionByActionHash), h)
 }
 
 // PendingNonce mocks base method.
@@ -587,6 +620,52 @@ func (m *MockCoreService) TipHeight() uint64 {
 func (mr *MockCoreServiceMockRecorder) TipHeight() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TipHeight", reflect.TypeOf((*MockCoreService)(nil).TipHeight))
+}
+
+// TraceCall mocks base method.
+func (m *MockCoreService) TraceCall(ctx context.Context, callerAddr address.Address, blkNumOrHash any, contractAddress string, nonce uint64, amount *big.Int, gasLimit uint64, data []byte, config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TraceCall", ctx, callerAddr, blkNumOrHash, contractAddress, nonce, amount, gasLimit, data, config)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(*action.Receipt)
+	ret2, _ := ret[2].(any)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
+}
+
+// TraceCall indicates an expected call of TraceCall.
+func (mr *MockCoreServiceMockRecorder) TraceCall(ctx, callerAddr, blkNumOrHash, contractAddress, nonce, amount, gasLimit, data, config interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TraceCall", reflect.TypeOf((*MockCoreService)(nil).TraceCall), ctx, callerAddr, blkNumOrHash, contractAddress, nonce, amount, gasLimit, data, config)
+}
+
+// TraceTransaction mocks base method.
+func (m *MockCoreService) TraceTransaction(ctx context.Context, actHash string, config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TraceTransaction", ctx, actHash, config)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(*action.Receipt)
+	ret2, _ := ret[2].(any)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
+}
+
+// TraceTransaction indicates an expected call of TraceTransaction.
+func (mr *MockCoreServiceMockRecorder) TraceTransaction(ctx, actHash, config interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TraceTransaction", reflect.TypeOf((*MockCoreService)(nil).TraceTransaction), ctx, actHash, config)
+}
+
+// Track mocks base method.
+func (m *MockCoreService) Track(ctx context.Context, start time.Time, method string, size int64, success bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Track", ctx, start, method, size, success)
+}
+
+// Track indicates an expected call of Track.
+func (mr *MockCoreServiceMockRecorder) Track(ctx, start, method, size, success interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Track", reflect.TypeOf((*MockCoreService)(nil).Track), ctx, start, method, size, success)
 }
 
 // TransactionLogByActionHash mocks base method.

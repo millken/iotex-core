@@ -7,14 +7,12 @@ package chainservice
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-election/committee"
 	"github.com/iotexproject/iotex-proto/golang/iotexrpc"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
@@ -29,30 +27,19 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/block"
 	"github.com/iotexproject/iotex-core/blockchain/blockdao"
 	"github.com/iotexproject/iotex-core/blockindex"
+	"github.com/iotexproject/iotex-core/blockindex/contractstaking"
 	"github.com/iotexproject/iotex-core/blocksync"
 	"github.com/iotexproject/iotex-core/consensus"
 	"github.com/iotexproject/iotex-core/nodeinfo"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/lifecycle"
 	"github.com/iotexproject/iotex-core/pkg/log"
+	"github.com/iotexproject/iotex-core/pkg/util/blockutil"
+	"github.com/iotexproject/iotex-core/server/itx/nodestats"
 	"github.com/iotexproject/iotex-core/state/factory"
 )
 
 var (
-	_apiCallWithChainIDMtc = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "iotex_apicall_chainid_metrics",
-			Help: "API call ChainID Statistics",
-		},
-		[]string{"chain_id"},
-	)
-	_apiCallWithOutChainIDMtc = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "iotex_apicall_nochainid_metrics",
-			Help: "API call Without ChainID Statistics",
-		},
-		[]string{"sender", "recipient"},
-	)
 	_blockchainFullnessMtc = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "iotex_blockchain_fullness",
@@ -63,8 +50,6 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(_apiCallWithChainIDMtc)
-	prometheus.MustRegister(_apiCallWithOutChainIDMtc)
 	prometheus.MustRegister(_blockchainFullnessMtc)
 }
 
@@ -80,12 +65,16 @@ type ChainService struct {
 	p2pAgent          p2p.Agent
 	electionCommittee committee.Committee
 	// TODO: explorer dependency deleted at #1085, need to api related params
-	indexer            blockindex.Indexer
-	bfIndexer          blockindex.BloomFilterIndexer
-	candidateIndexer   *poll.CandidateIndexer
-	candBucketsIndexer *staking.CandidatesBucketsIndexer
-	registry           *protocol.Registry
-	nodeInfoManager    *nodeinfo.InfoManager
+	indexer                blockindex.Indexer
+	bfIndexer              blockindex.BloomFilterIndexer
+	candidateIndexer       *poll.CandidateIndexer
+	candBucketsIndexer     *staking.CandidatesBucketsIndexer
+	sgdIndexer             blockindex.SGDRegistry
+	contractStakingIndexer *contractstaking.Indexer
+	registry               *protocol.Registry
+	nodeInfoManager        *nodeinfo.InfoManager
+	apiStats               *nodestats.APILocalStats
+	blockTimeCalculator    *blockutil.BlockTimeCalculator
 }
 
 // Start starts the server
@@ -114,32 +103,7 @@ func (cs *ChainService) HandleAction(ctx context.Context, actPb *iotextypes.Acti
 	if err != nil {
 		log.L().Debug(err.Error())
 	}
-	chainIDmetrics(act)
 	return err
-}
-
-func chainIDmetrics(act action.SealedEnvelope) {
-	chainID := strconv.FormatUint(uint64(act.ChainID()), 10)
-	if act.ChainID() > 0 {
-		_apiCallWithChainIDMtc.WithLabelValues(chainID).Inc()
-	} else {
-		recipient, _ := act.Destination()
-		//it will be empty for staking action, change string to staking in such case
-		if recipient == "" {
-			act, ok := act.Action().(action.EthCompatibleAction)
-			if ok {
-				if ethTx, err := act.ToEthTx(); err == nil && ethTx.To() != nil {
-					if add, err := address.FromHex(ethTx.To().Hex()); err == nil {
-						recipient = add.String()
-					}
-				}
-			}
-			if recipient == "" {
-				recipient = "staking"
-			}
-		}
-		_apiCallWithOutChainIDMtc.WithLabelValues(act.SenderAddress().String(), recipient).Inc()
-	}
 }
 
 // HandleBlock handles incoming block request.
@@ -228,6 +192,8 @@ func (cs *ChainService) NewAPIServer(cfg api.Config, plugins map[int]interface{}
 			return p2pAgent.BroadcastOutbound(ctx, msg)
 		}),
 		api.WithNativeElection(cs.electionCommittee),
+		api.WithAPIStats(cs.apiStats),
+		api.WithSGDIndexer(cs.sgdIndexer),
 	}
 
 	svr, err := api.NewServerV2(
@@ -240,6 +206,7 @@ func (cs *ChainService) NewAPIServer(cfg api.Config, plugins map[int]interface{}
 		cs.bfIndexer,
 		cs.actpool,
 		cs.registry,
+		cs.blockTimeCalculator.CalculateBlockTime,
 		apiServerOptions...,
 	)
 	if err != nil {

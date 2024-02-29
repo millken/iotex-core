@@ -15,6 +15,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -26,6 +34,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/iotexproject/go-pkgs/hash"
+	"github.com/iotexproject/go-pkgs/util"
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-election/committee"
 	"github.com/iotexproject/iotex-proto/golang/iotexapi"
@@ -36,6 +45,7 @@ import (
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/action/protocol/poll"
+	"github.com/iotexproject/iotex-core/action/protocol/rewarding"
 	"github.com/iotexproject/iotex-core/action/protocol/rolldpos"
 	"github.com/iotexproject/iotex-core/actpool"
 	logfilter "github.com/iotexproject/iotex-core/api/logfilter"
@@ -53,11 +63,17 @@ import (
 	batch "github.com/iotexproject/iotex-core/pkg/messagebatcher"
 	"github.com/iotexproject/iotex-core/pkg/tracer"
 	"github.com/iotexproject/iotex-core/pkg/version"
+	"github.com/iotexproject/iotex-core/server/itx/nodestats"
 	"github.com/iotexproject/iotex-core/state"
 	"github.com/iotexproject/iotex-core/state/factory"
 )
 
 const _workerNumbers int = 5
+const (
+	// defaultTraceTimeout is the amount of time a single transaction can execute
+	// by default before being forcefully aborted.
+	defaultTraceTimeout = 5 * time.Second
+)
 
 type (
 	// CoreService provides api interface for user to interact with blockchain data
@@ -97,14 +113,17 @@ type (
 		Stop(ctx context.Context) error
 		// Actions returns actions within the range
 		Actions(start uint64, count uint64) ([]*iotexapi.ActionInfo, error)
+		// TODO: unify the three get action by hash methods: Action, ActionByActionHash, PendingActionByActionHash
 		// Action returns action by action hash
 		Action(actionHash string, checkPending bool) (*iotexapi.ActionInfo, error)
 		// ActionsByAddress returns all actions associated with an address
 		ActionsByAddress(addr address.Address, start uint64, count uint64) ([]*iotexapi.ActionInfo, error)
 		// ActionByActionHash returns action by action hash
-		ActionByActionHash(h hash.Hash256) (action.SealedEnvelope, hash.Hash256, uint64, uint32, error)
+		ActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, hash.Hash256, uint64, uint32, error)
+		// PendingActionByActionHash returns action by action hash
+		PendingActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, error)
 		// ActPoolActions returns the all Transaction Identifiers in the actpool
-		ActionsInActPool(actHashes []string) ([]action.SealedEnvelope, error)
+		ActionsInActPool(actHashes []string) ([]*action.SealedEnvelope, error)
 		// BlockByHeightRange returns blocks within the height range
 		BlockByHeightRange(uint64, uint64) ([]*apitypes.BlockWithReceipts, error)
 		// BlockByHeight returns the block and its receipt from block height
@@ -121,6 +140,8 @@ type (
 		LogsInBlockByHash(filter *logfilter.LogFilter, blockHash hash.Hash256) ([]*action.Log, error)
 		// LogsInRange filter logs among [start, end] blocks
 		LogsInRange(filter *logfilter.LogFilter, start, end, paginationSize uint64) ([]*action.Log, []hash.Hash256, error)
+		// Genesis returns the genesis of the chain
+		Genesis() genesis.Genesis
 		// EVMNetworkID returns the network id of evm
 		EVMNetworkID() uint32
 		// ChainID returns the chain id of evm
@@ -141,6 +162,21 @@ type (
 		ReceiveBlock(blk *block.Block) error
 		// BlockHashByBlockHeight returns block hash by block height
 		BlockHashByBlockHeight(blkHeight uint64) (hash.Hash256, error)
+		// TraceTransaction returns the trace result of a transaction
+		TraceTransaction(ctx context.Context, actHash string, config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error)
+		// TraceCall returns the trace result of a call
+		TraceCall(ctx context.Context,
+			callerAddr address.Address,
+			blkNumOrHash any,
+			contractAddress string,
+			nonce uint64,
+			amount *big.Int,
+			gasLimit uint64,
+			data []byte,
+			config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error)
+
+		// Track tracks the api call
+		Track(ctx context.Context, start time.Time, method string, size int64, success bool)
 	}
 
 	// coreService implements the CoreService interface
@@ -160,6 +196,9 @@ type (
 		electionCommittee committee.Committee
 		readCache         *ReadCache
 		messageBatcher    *batch.Manager
+		apiStats          *nodestats.APILocalStats
+		sgdIndexer        blockindex.SGDRegistry
+		getBlockTime      evm.GetBlockTime
 	}
 
 	// jobDesc provides a struct to get and store logs in core.LogsInRange
@@ -189,6 +228,20 @@ func WithNativeElection(committee committee.Committee) Option {
 	}
 }
 
+// WithAPIStats is the option to return RPC stats through API.
+func WithAPIStats(stats *nodestats.APILocalStats) Option {
+	return func(svr *coreService) {
+		svr.apiStats = stats
+	}
+}
+
+// WithSGDIndexer is the option to return SGD Indexer through API.
+func WithSGDIndexer(sgdIndexer blockindex.SGDRegistry) Option {
+	return func(svr *coreService) {
+		svr.sgdIndexer = sgdIndexer
+	}
+}
+
 type intrinsicGasCalculator interface {
 	IntrinsicGas() (uint64, error)
 }
@@ -209,6 +262,7 @@ func newCoreService(
 	bfIndexer blockindex.BloomFilterIndexer,
 	actPool actpool.ActPool,
 	registry *protocol.Registry,
+	getBlockTime evm.GetBlockTime,
 	opts ...Option,
 ) (CoreService, error) {
 	if cfg == (Config{}) {
@@ -233,10 +287,17 @@ func newCoreService(
 		chainListener: NewChainListener(500),
 		gs:            gasstation.NewGasStation(chain, dao, cfg.GasStation),
 		readCache:     NewReadCache(),
+		getBlockTime:  getBlockTime,
 	}
 
 	for _, opt := range opts {
 		opt(&core)
+	}
+
+	if core.broadcastHandler != nil {
+		core.messageBatcher = batch.NewManager(func(msg *batch.Message) error {
+			return core.broadcastHandler(context.Background(), core.bc.ChainID(), msg.Data)
+		})
 	}
 
 	return &core, nil
@@ -394,10 +455,13 @@ func (core *coreService) SendAction(ctx context.Context, in *iotextypes.Action) 
 	if err := core.validateChainID(in.GetCore().GetChainID()); err != nil {
 		return "", err
 	}
-
-	// reject web3 rewarding action if isn't activation feature
-	if err := core.validateWeb3Rewarding(selp); err != nil {
-		return "", err
+	// reject action if a replay tx is not whitelisted
+	var (
+		g        = core.Genesis()
+		deployer = selp.SenderAddress()
+	)
+	if selp.Encoding() == uint32(iotextypes.Encoding_ETHEREUM_UNPROTECTED) && !g.IsDeployerWhitelisted(deployer) {
+		return "", status.Errorf(codes.InvalidArgument, "replay deployer %v not whitelisted", deployer.Hex())
 	}
 
 	// Add to local actpool
@@ -412,7 +476,7 @@ func (core *coreService) SendAction(ctx context.Context, in *iotextypes.Action) 
 		if serErr != nil {
 			l.Error("Data corruption", zap.Error(serErr))
 		} else {
-			l.With(zap.String("txBytes", hex.EncodeToString(txBytes))).Error("Failed to accept action", zap.Error(err))
+			l.With(zap.String("txBytes", hex.EncodeToString(txBytes))).Debug("Failed to accept action", zap.Error(err))
 		}
 		st := status.New(codes.Internal, err.Error())
 		br := &errdetails.BadRequest{
@@ -432,13 +496,14 @@ func (core *coreService) SendAction(ctx context.Context, in *iotextypes.Action) 
 	// If there is no error putting into local actpool,
 	// Broadcast it to the network
 	msg := in
-	if core.messageBatcher != nil {
+	if ge := core.bc.Genesis(); ge.IsQuebec(core.bc.TipHeight()) {
 		err = core.messageBatcher.Put(&batch.Message{
 			ChainID: core.bc.ChainID(),
 			Target:  nil,
 			Data:    msg,
 		})
 	} else {
+		//TODO: remove height check after activated
 		err = core.broadcastHandler(ctx, core.bc.ChainID(), msg)
 	}
 	if err != nil {
@@ -452,23 +517,14 @@ func (core *coreService) PendingNonce(addr address.Address) (uint64, error) {
 }
 
 func (core *coreService) validateChainID(chainID uint32) error {
-	if ge := core.bc.Genesis(); ge.IsMidway(core.bc.TipHeight()) && chainID != core.bc.ChainID() && chainID != 0 {
+	ge := core.bc.Genesis()
+	if ge.IsQuebec(core.bc.TipHeight()) && chainID != core.bc.ChainID() {
+		return status.Errorf(codes.InvalidArgument, "ChainID does not match, expecting %d, got %d", core.bc.ChainID(), chainID)
+	}
+	if ge.IsMidway(core.bc.TipHeight()) && chainID != core.bc.ChainID() && chainID != 0 {
 		return status.Errorf(codes.InvalidArgument, "ChainID does not match, expecting %d, got %d", core.bc.ChainID(), chainID)
 	}
 	return nil
-}
-
-func (core *coreService) validateWeb3Rewarding(selp action.SealedEnvelope) error {
-	if ge := core.bc.Genesis(); ge.IsToBeEnabled(core.bc.TipHeight()) || selp.Encoding() != uint32(iotextypes.Encoding_ETHEREUM_RLP) {
-		return nil
-	}
-	switch selp.Action().(type) {
-	case *action.ClaimFromRewardingFund,
-		*action.DepositToRewardingFund:
-		return status.Error(codes.Unavailable, "Web3 rewarding isn't activation")
-	default:
-		return nil
-	}
 }
 
 // ReadContract reads the state in a contract address specified by the slot
@@ -497,7 +553,7 @@ func (core *coreService) ReadContract(ctx context.Context, callerAddr address.Ad
 	}
 	sc.SetGasPrice(big.NewInt(0)) // ReadContract() is read-only, use 0 to prevent insufficient gas
 
-	retval, receipt, err := core.sf.SimulateExecution(ctx, callerAddr, sc, core.dao.GetBlockHash)
+	retval, receipt, err := core.simulateExecution(ctx, callerAddr, sc, core.dao.GetBlockHash, core.getBlockTime)
 	if err != nil {
 		return "", nil, status.Error(codes.Internal, err.Error())
 	}
@@ -1020,24 +1076,33 @@ func (core *coreService) BlockHashByBlockHeight(blkHeight uint64) (hash.Hash256,
 }
 
 // ActionByActionHash returns action by action hash
-func (core *coreService) ActionByActionHash(h hash.Hash256) (action.SealedEnvelope, hash.Hash256, uint64, uint32, error) {
+func (core *coreService) ActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, hash.Hash256, uint64, uint32, error) {
 	if err := core.checkActionIndex(); err != nil {
-		return action.SealedEnvelope{}, hash.ZeroHash256, 0, 0, status.Error(codes.NotFound, blockindex.ErrActionIndexNA.Error())
+		return nil, hash.ZeroHash256, 0, 0, status.Error(codes.NotFound, blockindex.ErrActionIndexNA.Error())
 	}
 
 	actIndex, err := core.indexer.GetActionIndex(h[:])
 	if err != nil {
-		return action.SealedEnvelope{}, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
+		return nil, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
 	}
 	blk, err := core.dao.GetBlockByHeight(actIndex.BlockHeight())
 	if err != nil {
-		return action.SealedEnvelope{}, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
+		return nil, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
 	}
 	selp, index, err := core.dao.GetActionByActionHash(h, actIndex.BlockHeight())
 	if err != nil {
-		return action.SealedEnvelope{}, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
+		return nil, hash.ZeroHash256, 0, 0, errors.Wrap(ErrNotFound, err.Error())
 	}
 	return selp, blk.HashBlock(), actIndex.BlockHeight(), index, nil
+}
+
+// ActionByActionHash returns action by action hash
+func (core *coreService) PendingActionByActionHash(h hash.Hash256) (*action.SealedEnvelope, error) {
+	selp, err := core.ap.GetActionByHash(h)
+	if err != nil {
+		return nil, errors.Wrap(ErrNotFound, err.Error())
+	}
+	return selp, nil
 }
 
 // UnconfirmedActionsByAddress returns all unconfirmed actions in actpool associated with an address
@@ -1162,7 +1227,7 @@ func (core *coreService) getGravityChainStartHeight(epochHeight uint64) (uint64,
 	return gravityChainStartHeight, nil
 }
 
-func (core *coreService) committedAction(selp action.SealedEnvelope, blkHash hash.Hash256, blkHeight uint64) (*iotexapi.ActionInfo, error) {
+func (core *coreService) committedAction(selp *action.SealedEnvelope, blkHash hash.Hash256, blkHeight uint64) (*iotexapi.ActionInfo, error) {
 	actHash, err := selp.Hash()
 	if err != nil {
 		return nil, err
@@ -1190,7 +1255,7 @@ func (core *coreService) committedAction(selp action.SealedEnvelope, blkHash has
 	}, nil
 }
 
-func (core *coreService) pendingAction(selp action.SealedEnvelope) (*iotexapi.ActionInfo, error) {
+func (core *coreService) pendingAction(selp *action.SealedEnvelope) (*iotexapi.ActionInfo, error) {
 	actHash, err := selp.Hash()
 	if err != nil {
 		return nil, err
@@ -1407,6 +1472,7 @@ func (core *coreService) EstimateExecutionGasConsumption(ctx context.Context, sc
 		return 0, status.Error(codes.InvalidArgument, err.Error())
 	}
 	sc.SetNonce(state.PendingNonce())
+	//gasprice should be 0, otherwise it may cause the API to return an error, such as insufficient balance.
 	sc.SetGasPrice(big.NewInt(0))
 	blockGasLimit := core.bc.Genesis().BlockGasLimit
 	sc.SetGasLimit(blockGasLimit)
@@ -1459,7 +1525,8 @@ func (core *coreService) isGasLimitEnough(
 	if err != nil {
 		return false, nil, err
 	}
-	_, receipt, err := core.sf.SimulateExecution(ctx, caller, sc, core.dao.GetBlockHash)
+
+	_, receipt, err := core.simulateExecution(ctx, caller, sc, core.dao.GetBlockHash, core.getBlockTime)
 	if err != nil {
 		return false, nil, err
 	}
@@ -1545,8 +1612,8 @@ func (core *coreService) getProtocolAccount(ctx context.Context, addr string) (*
 }
 
 // ActionsInActPool returns the all Transaction Identifiers in the actpool
-func (core *coreService) ActionsInActPool(actHashes []string) ([]action.SealedEnvelope, error) {
-	var ret []action.SealedEnvelope
+func (core *coreService) ActionsInActPool(actHashes []string) ([]*action.SealedEnvelope, error) {
+	var ret []*action.SealedEnvelope
 	if len(actHashes) == 0 {
 		for _, sealeds := range core.ap.PendingActionMap() {
 			ret = append(ret, sealeds...)
@@ -1566,6 +1633,11 @@ func (core *coreService) ActionsInActPool(actHashes []string) ([]action.SealedEn
 		ret = append(ret, sealed)
 	}
 	return ret, nil
+}
+
+// Genesis returns the genesis of the chain
+func (core *coreService) Genesis() genesis.Genesis {
+	return core.bc.Genesis()
 }
 
 // EVMNetworkID returns the network id of evm
@@ -1608,11 +1680,142 @@ func (core *coreService) SimulateExecution(ctx context.Context, addr address.Add
 		return nil, nil, err
 	}
 	exec.SetGasLimit(core.bc.Genesis().BlockGasLimit)
-	return core.sf.SimulateExecution(ctx, addr, exec, core.dao.GetBlockHash)
+	return core.simulateExecution(ctx, addr, exec, core.dao.GetBlockHash, core.getBlockTime)
 }
 
 // SyncingProgress returns the syncing status of node
 func (core *coreService) SyncingProgress() (uint64, uint64, uint64) {
 	startingHeight, currentHeight, targetHeight, _ := core.bs.SyncStatus()
 	return startingHeight, currentHeight, targetHeight
+}
+
+// TraceTransaction returns the trace result of transaction
+func (core *coreService) TraceTransaction(ctx context.Context, actHash string, config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error) {
+	actInfo, err := core.Action(util.Remove0xPrefix(actHash), false)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	act, err := (&action.Deserializer{}).SetEvmNetworkID(core.EVMNetworkID()).ActionToSealedEnvelope(actInfo.Action)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	sc, ok := act.Action().(*action.Execution)
+	if !ok {
+		return nil, nil, nil, errors.New("the type of action is not supported")
+	}
+	addr, _ := address.FromString(address.ZeroAddress)
+	retval, receipt, tracer, err := core.traceTx(ctx, new(tracers.Context), config, func(ctx context.Context) ([]byte, *action.Receipt, error) {
+
+		return core.simulateExecution(ctx, addr, sc, core.dao.GetBlockHash, core.getBlockTime)
+	})
+	return retval, receipt, tracer, err
+}
+
+// TraceCall returns the trace result of call
+func (core *coreService) TraceCall(ctx context.Context,
+	callerAddr address.Address,
+	blkNumOrHash any,
+	contractAddress string,
+	nonce uint64,
+	amount *big.Int,
+	gasLimit uint64,
+	data []byte,
+	config *tracers.TraceConfig) ([]byte, *action.Receipt, any, error) {
+	if gasLimit == 0 {
+		gasLimit = core.bc.Genesis().BlockGasLimit
+	}
+	ctx, err := core.bc.Context(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if nonce == 0 {
+		state, err := accountutil.AccountState(ctx, core.sf, callerAddr)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		nonce = state.PendingNonce()
+	}
+	exec, err := action.NewExecution(
+		contractAddress,
+		nonce,
+		amount,
+		gasLimit,
+		big.NewInt(0),
+		data,
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	retval, receipt, tracer, err := core.traceTx(ctx, new(tracers.Context), config, func(ctx context.Context) ([]byte, *action.Receipt, error) {
+		return core.simulateExecution(ctx, callerAddr, exec, core.dao.GetBlockHash, core.getBlockTime)
+	})
+	return retval, receipt, tracer, err
+}
+
+// Track tracks the api call
+func (core *coreService) Track(ctx context.Context, start time.Time, method string, size int64, success bool) {
+	if core.apiStats == nil {
+		return
+	}
+	elapsed := time.Since(start)
+	core.apiStats.ReportCall(nodestats.APIReport{
+		Method:       method,
+		HandlingTime: elapsed,
+		Success:      success,
+	}, size)
+}
+
+func (core *coreService) traceTx(ctx context.Context, txctx *tracers.Context, config *tracers.TraceConfig, simulateFn func(ctx context.Context) ([]byte, *action.Receipt, error)) ([]byte, *action.Receipt, any, error) {
+	var (
+		tracer vm.EVMLogger
+		err    error
+	)
+	switch {
+	case config == nil:
+		tracer = logger.NewStructLogger(nil)
+	case config.Tracer != nil:
+		// Define a meaningful timeout of a single transaction trace
+		timeout := defaultTraceTimeout
+		if config.Timeout != nil {
+			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		t, err := tracers.DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		go func() {
+			<-deadlineCtx.Done()
+			if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+				t.Stop(errors.New("execution timeout"))
+			}
+		}()
+		tracer = t
+
+	default:
+		tracer = logger.NewStructLogger(config.Config)
+	}
+	ctx = protocol.WithVMConfigCtx(ctx, vm.Config{
+		Debug:     true,
+		Tracer:    tracer,
+		NoBaseFee: true,
+	})
+	ctx = protocol.WithBlockCtx(ctx, protocol.BlockCtx{})
+	ctx = genesis.WithGenesisContext(ctx, core.bc.Genesis())
+	ctx = protocol.WithBlockchainCtx(protocol.WithFeatureCtx(ctx), protocol.BlockchainCtx{})
+	retval, receipt, err := simulateFn(ctx)
+	return retval, receipt, tracer, err
+}
+
+func (core *coreService) simulateExecution(ctx context.Context, addr address.Address, exec *action.Execution, getBlockHash evm.GetBlockHash, getBlockTime evm.GetBlockTime) ([]byte, *action.Receipt, error) {
+	ctx = evm.WithHelperCtx(ctx, evm.HelperContext{
+		GetBlockHash:   getBlockHash,
+		GetBlockTime:   getBlockTime,
+		DepositGasFunc: rewarding.DepositGasWithSGD,
+		Sgd:            core.sgdIndexer,
+	})
+	return core.sf.SimulateExecution(ctx, addr, exec)
 }

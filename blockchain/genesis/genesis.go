@@ -1,4 +1,4 @@
-// Copyright (c) 2020 IoTeX Foundation
+// Copyright (c) 2023 IoTeX Foundation
 // This source code is provided 'as is' and no warranties are given as to title or non-infringement, merchantability
 // or fitness for purpose and, to the extent permitted by law, all liability for your use of the code is disclaimed.
 // This source code is governed by Apache License 2.0 that can be found in the LICENSE file.
@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"go.uber.org/config"
 	"go.uber.org/zap"
@@ -69,10 +70,15 @@ func defaultConfig() Genesis {
 			MidwayBlockHeight:       16509241,
 			NewfoundlandBlockHeight: 17662681,
 			OkhotskBlockHeight:      21542761,
+			PalauBlockHeight:        22991401,
+			QuebecBlockHeight:       24838201,
+			RedseaBlockHeight:       26704441,
+			SumatraBlockHeight:      28516681,
 			ToBeEnabledBlockHeight:  math.MaxUint64,
 		},
 		Account: Account{
-			InitBalanceMap: make(map[string]string),
+			InitBalanceMap:          make(map[string]string),
+			ReplayDeployerWhitelist: []string{"0x3fab184622dc19b6109349b94811493bf2a45362"},
 		},
 		Poll: Poll{
 			PollMode:                         "nativeMix",
@@ -81,6 +87,8 @@ func defaultConfig() Genesis {
 			ProbationEpochPeriod:             6,
 			ProbationIntensityRate:           90,
 			UnproductiveDelegateMaxCacheSize: 20,
+			SystemStakingContractAddress:     "io1drde9f483guaetl3w3w6n6y7yv80f8fael7qme", // https://iotexscout.io/tx/8b899515d180d631abe8596b091380b0f42117122415393fa459c74c2bc5b6af
+			SystemStakingContractHeight:      24486464,
 		},
 		Rewarding: Rewarding{
 			InitBalanceStr:                 unit.ConvertIotxToRau(200000000).String(),
@@ -106,9 +114,10 @@ func defaultConfig() Genesis {
 				Fee:          unit.ConvertIotxToRau(100).String(),
 				MinSelfStake: unit.ConvertIotxToRau(1200000).String(),
 			},
-			WithdrawWaitingPeriod: 3 * 24 * time.Hour,
-			MinStakeAmount:        unit.ConvertIotxToRau(100).String(),
-			BootstrapCandidates:   []BootstrapCandidate{},
+			WithdrawWaitingPeriod:            3 * 24 * time.Hour,
+			MinStakeAmount:                   unit.ConvertIotxToRau(100).String(),
+			BootstrapCandidates:              []BootstrapCandidate{},
+			EndorsementWithdrawWaitingBlocks: 24 * 60 * 60 / 5,
 		},
 	}
 }
@@ -220,20 +229,36 @@ type (
 		// 3. enable web3 staking transaction
 		NewfoundlandBlockHeight uint64 `yaml:"newfoundlandHeight"`
 		// OkhotskBlockHeight is the start height to
-		// 1. enabled London EVM
+		// 1. enable London EVM
 		// 2. create zero-nonce account
 		// 3. fix gas and nonce update
 		// 4. fix unproductive delegates in staking protocol
 		OkhotskBlockHeight uint64 `yaml:"okhotskHeight"`
+		// PalauBlockHeight is the the start height to
+		// 1. enable rewarding action via web3
+		// 2. broadcast node info into the p2p network
+		PalauBlockHeight uint64 `yaml:"palauHeight"`
+		// QuebecBlockHeight is the start height to
+		// 1. enforce using correct chainID only
+		// 2. enable IIP-13 liquidity staking
+		// 3. valiate system action layout
+		QuebecBlockHeight uint64 `yaml:"quebecHeight"`
+		// RedseaBlockHeight is the start height to
+		// 1. upgrade go-ethereum to Bellatrix release
+		// 2. correct weighted votes for contract staking bucket
+		RedseaBlockHeight uint64 `yaml:"redseaHeight"`
+		// SumatraBlockHeight is the start height to enable Shanghai EVM
+		SumatraBlockHeight uint64 `yaml:"sumatraHeight"`
 		// ToBeEnabledBlockHeight is a fake height that acts as a gating factor for WIP features
 		// upon next release, change IsToBeEnabled() to IsNextHeight() for features to be released
-		// 1. web3 rewarding api
 		ToBeEnabledBlockHeight uint64 `yaml:"toBeEnabledHeight"`
 	}
 	// Account contains the configs for account protocol
 	Account struct {
 		// InitBalanceMap is the address and initial balance mapping before the first block.
 		InitBalanceMap map[string]string `yaml:"initBalances"`
+		// ReplayDeployerWhitelist is the whitelist address for unprotected (pre-EIP155) transaction
+		ReplayDeployerWhitelist []string `yaml:"replayDeployerWhitelist"`
 	}
 	// Poll contains the configs for poll protocol
 	Poll struct {
@@ -270,7 +295,15 @@ type (
 		// ProbationIntensityRate is a intensity rate of probation range from [0, 100], where 100 is hard-probation
 		ProbationIntensityRate uint32 `yaml:"probationIntensityRate"`
 		// UnproductiveDelegateMaxCacheSize is a max cache size of upd which is stored into state DB (probationEpochPeriod <= UnproductiveDelegateMaxCacheSize)
-		UnproductiveDelegateMaxCacheSize uint64 `yaml:unproductiveDelegateMaxCacheSize`
+		UnproductiveDelegateMaxCacheSize uint64 `yaml:"unproductiveDelegateMaxCacheSize"`
+		// SystemStakingContractAddress is the address of system staking contract
+		SystemStakingContractAddress string `yaml:"systemStakingContractAddress"`
+		// SystemStakingContractHeight is the height of system staking contract
+		SystemStakingContractHeight uint64 `yaml:"systemStakingContractHeight"`
+		// SystemSGDContractAddress is the address of system sgd contract
+		SystemSGDContractAddress string `yaml:"systemSGDContractAddress"`
+		// SystemSGDContractHeight is the height of system sgd contract
+		SystemSGDContractHeight uint64 `yaml:"systemSGDContractHeight"`
 	}
 	// Delegate defines a delegate with address and votes
 	Delegate struct {
@@ -312,11 +345,12 @@ type (
 	}
 	// Staking contains the configs for staking protocol
 	Staking struct {
-		VoteWeightCalConsts   VoteWeightCalConsts  `yaml:"voteWeightCalConsts"`
-		RegistrationConsts    RegistrationConsts   `yaml:"registrationConsts"`
-		WithdrawWaitingPeriod time.Duration        `yaml:"withdrawWaitingPeriod"`
-		MinStakeAmount        string               `yaml:"minStakeAmount"`
-		BootstrapCandidates   []BootstrapCandidate `yaml:"bootstrapCandidates"`
+		VoteWeightCalConsts              VoteWeightCalConsts  `yaml:"voteWeightCalConsts"`
+		RegistrationConsts               RegistrationConsts   `yaml:"registrationConsts"`
+		WithdrawWaitingPeriod            time.Duration        `yaml:"withdrawWaitingPeriod"`
+		MinStakeAmount                   string               `yaml:"minStakeAmount"`
+		BootstrapCandidates              []BootstrapCandidate `yaml:"bootstrapCandidates"`
+		EndorsementWithdrawWaitingBlocks uint64               `yaml:"endorsementWithdrawWaitingBlocks"`
 	}
 
 	// VoteWeightCalConsts contains the configs for calculating vote weight
@@ -541,9 +575,49 @@ func (g *Blockchain) IsOkhotsk(height uint64) bool {
 	return g.isPost(g.OkhotskBlockHeight, height)
 }
 
+// IsPalau checks whether height is equal to or larger than palau height
+func (g *Blockchain) IsPalau(height uint64) bool {
+	return g.isPost(g.PalauBlockHeight, height)
+}
+
+// IsQuebec checks whether height is equal to or larger than quebec height
+func (g *Blockchain) IsQuebec(height uint64) bool {
+	return g.isPost(g.QuebecBlockHeight, height)
+}
+
+// IsRedsea checks whether height is equal to or larger than redsea height
+func (g *Blockchain) IsRedsea(height uint64) bool {
+	return g.isPost(g.RedseaBlockHeight, height)
+}
+
+// IsSumatra checks whether height is equal to or larger than sumatra height
+func (g *Blockchain) IsSumatra(height uint64) bool {
+	return g.isPost(g.SumatraBlockHeight, height)
+}
+
 // IsToBeEnabled checks whether height is equal to or larger than toBeEnabled height
 func (g *Blockchain) IsToBeEnabled(height uint64) bool {
 	return g.isPost(g.ToBeEnabledBlockHeight, height)
+}
+
+// IsDeployerWhitelisted returns if the replay deployer is whitelisted
+func (a *Account) IsDeployerWhitelisted(deployer address.Address) bool {
+	for _, v := range a.ReplayDeployerWhitelist {
+		if v[:3] == "io1" {
+			if addr, err := address.FromString(v); err == nil {
+				if address.Equal(deployer, addr) {
+					return true
+				}
+			}
+		} else if common.IsHexAddress(v) {
+			if addr, err := address.FromHex(v); err == nil {
+				if address.Equal(deployer, addr) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // InitBalances returns the address that have initial balances and the corresponding amounts. The i-th amount is the

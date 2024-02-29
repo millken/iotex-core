@@ -7,9 +7,14 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
+	"math/big"
 	"strconv"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/golang/mock/gomock"
 	"github.com/iotexproject/iotex-proto/golang/iotexapi"
 	"github.com/pkg/errors"
@@ -21,13 +26,14 @@ import (
 	"github.com/iotexproject/iotex-core/api/logfilter"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/blockdao"
+	"github.com/iotexproject/iotex-core/test/identityset"
 	"github.com/iotexproject/iotex-core/test/mock/mock_blockindex"
 	"github.com/iotexproject/iotex-core/testutil"
 )
 
 func TestLogsInRange(t *testing.T) {
 	require := require.New(t)
-	svr, _, _, _, cleanCallback := setupTestCoreSerivce()
+	svr, _, _, _, cleanCallback := setupTestCoreService()
 	defer cleanCallback()
 
 	t.Run("blocks with four logs", func(t *testing.T) {
@@ -39,7 +45,7 @@ func TestLogsInRange(t *testing.T) {
 		to, err := strconv.ParseUint(testData.ToBlock, 10, 64)
 		require.NoError(err)
 
-		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(&filter), from, to, uint64(0))
+		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(filter), from, to, uint64(0))
 		require.NoError(err)
 		require.Equal(4, len(logs))
 		require.Equal(4, len(hashes))
@@ -53,7 +59,7 @@ func TestLogsInRange(t *testing.T) {
 		to, err := strconv.ParseUint(testData.ToBlock, 10, 64)
 		require.NoError(err)
 
-		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(&filter), from, to, uint64(0))
+		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(filter), from, to, uint64(0))
 		require.NoError(err)
 		require.Equal(0, len(logs))
 		require.Equal(0, len(hashes))
@@ -67,7 +73,7 @@ func TestLogsInRange(t *testing.T) {
 		to, err := strconv.ParseUint(testData.ToBlock, 10, 64)
 		require.NoError(err)
 
-		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(&filter), from, to, uint64(5001))
+		logs, hashes, err := svr.LogsInRange(logfilter.NewLogFilter(filter), from, to, uint64(5001))
 		require.NoError(err)
 		require.Equal(4, len(logs))
 		require.Equal(4, len(hashes))
@@ -81,7 +87,7 @@ func TestLogsInRange(t *testing.T) {
 		to, err := strconv.ParseUint(testData.ToBlock, 10, 64)
 		require.NoError(err)
 
-		_, _, err = svr.LogsInRange(logfilter.NewLogFilter(&filter), from, to, uint64(0))
+		_, _, err = svr.LogsInRange(logfilter.NewLogFilter(filter), from, to, uint64(0))
 		expectedErr := errors.New("invalid start or end height")
 		require.Error(err)
 		require.Equal(expectedErr.Error(), err.Error())
@@ -95,7 +101,7 @@ func TestLogsInRange(t *testing.T) {
 		to, err := strconv.ParseUint(testData.ToBlock, 10, 64)
 		require.NoError(err)
 
-		_, _, err = svr.LogsInRange(logfilter.NewLogFilter(&filter), from, to, uint64(0))
+		_, _, err = svr.LogsInRange(logfilter.NewLogFilter(filter), from, to, uint64(0))
 		expectedErr := errors.New("start block > tip height")
 		require.Error(err)
 		require.Equal(expectedErr.Error(), err.Error())
@@ -103,7 +109,7 @@ func TestLogsInRange(t *testing.T) {
 }
 
 func BenchmarkLogsInRange(b *testing.B) {
-	svr, _, _, _, cleanCallback := setupTestCoreSerivce()
+	svr, _, _, _, cleanCallback := setupTestCoreService()
 	defer cleanCallback()
 
 	ctrl := gomock.NewController(b)
@@ -116,19 +122,19 @@ func BenchmarkLogsInRange(b *testing.B) {
 	to, _ := strconv.ParseInt(testData.ToBlock, 10, 64)
 
 	b.Run("five workers to extract logs", func(b *testing.B) {
-		blk.EXPECT().FilterBlocksInRange(logfilter.NewLogFilter(&filter), uint64(from), uint64(to), 0).Return([]uint64{1, 2, 3, 4}, nil).AnyTimes()
+		blk.EXPECT().FilterBlocksInRange(logfilter.NewLogFilter(filter), uint64(from), uint64(to), 0).Return([]uint64{1, 2, 3, 4}, nil).AnyTimes()
 		for i := 0; i < b.N; i++ {
-			svr.LogsInRange(logfilter.NewLogFilter(&filter), uint64(from), uint64(to), uint64(0))
+			svr.LogsInRange(logfilter.NewLogFilter(filter), uint64(from), uint64(to), uint64(0))
 		}
 	})
 }
 
-func getTopicsAddress(addr []string, topics [][]string) (iotexapi.LogsFilter, error) {
+func getTopicsAddress(addr []string, topics [][]string) (*iotexapi.LogsFilter, error) {
 	var filter iotexapi.LogsFilter
 	for _, ethAddr := range addr {
 		ioAddr, err := ethAddrToIoAddr(ethAddr)
 		if err != nil {
-			return iotexapi.LogsFilter{}, err
+			return nil, err
 		}
 		filter.Address = append(filter.Address, ioAddr.String())
 	}
@@ -137,17 +143,17 @@ func getTopicsAddress(addr []string, topics [][]string) (iotexapi.LogsFilter, er
 		for _, str := range tp {
 			b, err := hexToBytes(str)
 			if err != nil {
-				return iotexapi.LogsFilter{}, err
+				return nil, err
 			}
 			topic = append(topic, b)
 		}
 		filter.Topics = append(filter.Topics, &iotexapi.Topics{Topic: topic})
 	}
 
-	return filter, nil
+	return &filter, nil
 }
 
-func setupTestCoreSerivce() (CoreService, blockchain.Blockchain, blockdao.BlockDAO, actpool.ActPool, func()) {
+func setupTestCoreService() (CoreService, blockchain.Blockchain, blockdao.BlockDAO, actpool.ActPool, func()) {
 	cfg := newConfig()
 
 	// TODO (zhi): revise
@@ -170,7 +176,7 @@ func setupTestCoreSerivce() (CoreService, blockchain.Blockchain, blockdao.BlockD
 	opts := []Option{WithBroadcastOutbound(func(ctx context.Context, chainID uint32, msg proto.Message) error {
 		return nil
 	})}
-	svr, err := newCoreService(cfg.api, bc, nil, sf, dao, indexer, bfIndexer, ap, registry, opts...)
+	svr, err := newCoreService(cfg.api, bc, nil, sf, dao, indexer, bfIndexer, ap, registry, func(u uint64) (time.Time, error) { return time.Time{}, nil }, opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -184,7 +190,7 @@ func TestEstimateGasForAction(t *testing.T) {
 	require := require.New(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	svr, _, _, _, cleanCallback := setupTestCoreSerivce()
+	svr, _, _, _, cleanCallback := setupTestCoreService()
 	defer cleanCallback()
 
 	estimatedGas, err := svr.EstimateGasForAction(context.Background(), getAction())
@@ -197,6 +203,104 @@ func TestEstimateGasForAction(t *testing.T) {
 
 	_, err = svr.EstimateGasForAction(context.Background(), nil)
 	require.Contains(err.Error(), action.ErrNilProto.Error())
+}
+
+func TestEstimateExecutionGasConsumption(t *testing.T) {
+	require := require.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svr, _, _, _, cleanCallback := setupTestCoreService()
+	defer cleanCallback()
+
+	callAddr := identityset.Address(29)
+	sc, err := action.NewExecution("", 0, big.NewInt(0), 0, big.NewInt(0), []byte{})
+	require.NoError(err)
+
+	//gasprice is zero
+	sc.SetGasPrice(big.NewInt(0))
+	estimatedGas, err := svr.EstimateExecutionGasConsumption(context.Background(), sc, callAddr)
+	require.NoError(err)
+	require.Equal(uint64(10000), estimatedGas)
+
+	//gasprice no zero, should return error before fixed
+	sc.SetGasPrice(big.NewInt(100))
+	estimatedGas, err = svr.EstimateExecutionGasConsumption(context.Background(), sc, callAddr)
+	require.NoError(err)
+	require.Equal(uint64(10000), estimatedGas)
+
+}
+
+func TestTraceTransaction(t *testing.T) {
+	require := require.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svr, bc, _, ap, cleanCallback := setupTestCoreService()
+	defer cleanCallback()
+	ctx := context.Background()
+	tsf, err := action.SignedExecution(identityset.Address(29).String(),
+		identityset.PrivateKey(29), 1, big.NewInt(0), testutil.TestGasLimit,
+		big.NewInt(testutil.TestGasPriceInt64), []byte{})
+	require.NoError(err)
+	tsfhash, err := tsf.Hash()
+
+	blk1Time := testutil.TimestampNow()
+	require.NoError(ap.Add(ctx, tsf))
+	blk, err := bc.MintNewBlock(blk1Time)
+	require.NoError(err)
+	require.NoError(bc.CommitBlock(blk))
+	cfg := &tracers.TraceConfig{
+		Config: &logger.Config{
+			EnableMemory:     true,
+			DisableStack:     false,
+			DisableStorage:   false,
+			EnableReturnData: true,
+		},
+	}
+	retval, receipt, traces, err := svr.TraceTransaction(ctx, hex.EncodeToString(tsfhash[:]), cfg)
+	require.NoError(err)
+	require.Equal("0x", byteToHex(retval))
+	require.Equal(uint64(1), receipt.Status)
+	require.Equal(uint64(0x2710), receipt.GasConsumed)
+	require.Empty(receipt.ExecutionRevertMsg())
+	require.Equal(0, len(traces.(*logger.StructLogger).StructLogs()))
+}
+
+func TestTraceCall(t *testing.T) {
+	require := require.New(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	svr, bc, _, ap, cleanCallback := setupTestCoreService()
+	defer cleanCallback()
+	ctx := context.Background()
+	tsf, err := action.SignedExecution(identityset.Address(29).String(),
+		identityset.PrivateKey(29), 1, big.NewInt(0), testutil.TestGasLimit,
+		big.NewInt(testutil.TestGasPriceInt64), []byte{})
+	require.NoError(err)
+
+	blk1Time := testutil.TimestampNow()
+	require.NoError(ap.Add(ctx, tsf))
+	blk, err := bc.MintNewBlock(blk1Time)
+	require.NoError(err)
+	require.NoError(bc.CommitBlock(blk))
+	cfg := &tracers.TraceConfig{
+		Config: &logger.Config{
+			EnableMemory:     true,
+			DisableStack:     false,
+			DisableStorage:   false,
+			EnableReturnData: true,
+		},
+	}
+	retval, receipt, traces, err := svr.TraceCall(ctx,
+		identityset.Address(29), blk.Height(),
+		identityset.Address(29).String(),
+		0, big.NewInt(0), testutil.TestGasLimit,
+		[]byte{}, cfg)
+	require.NoError(err)
+	require.Equal("0x", byteToHex(retval))
+	require.Equal(uint64(1), receipt.Status)
+	require.Equal(uint64(0x2710), receipt.GasConsumed)
+	require.Empty(receipt.ExecutionRevertMsg())
+	require.Equal(0, len(traces.(*logger.StructLogger).StructLogs()))
 }
 
 func TestProofAndCompareReverseActions(t *testing.T) {

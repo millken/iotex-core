@@ -14,34 +14,30 @@ CREATE TABLE "public"."accounts" (
 
 	"id" serial8 NOT NULL,
 	"block_height" int8 NOT NULL,
-	"account_address" varchar(42) COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
+	"account_address" varchar(42) NOT NULL DEFAULT '',
 	"balance" numeric(42,0) NOT NULL DEFAULT 0,
 	"voting_weight" numeric(42,0) NOT NULL DEFAULT 0,
 	"is_contract" bool NOT NULL DEFAULT false,
 	"is_candidate" bool NOT NULL DEFAULT false
 
-)
-;
-ALTER TABLE "public"."accounts" OWNER TO "postgres";
+)PARTITION BY RANGE (block_height);
 
--- ----------------------------
--- Indexes structure for table accounts
--- ----------------------------
-CREATE UNIQUE INDEX "accounts_block_height_account_address_idx" ON "public"."accounts" USING btree (
+CREATE TABLE accounts_0_5000000 PARTITION OF accounts FOR VALUES FROM (0) TO (5000000);
+CREATE TABLE accounts_5000000_10000000 PARTITION OF accounts FOR VALUES FROM (5000000) TO (10000000);
+CREATE TABLE accounts_10000000_15000000 PARTITION OF accounts FOR VALUES FROM (10000000) TO (15000000);
+CREATE TABLE accounts_15000000_20000000 PARTITION OF accounts FOR VALUES FROM (15000000) TO (20000000);
+CREATE TABLE accounts_20000000_25000000 PARTITION OF accounts FOR VALUES FROM (20000000) TO (25000000);
+CREATE TABLE accounts_25000000_30000000 PARTITION OF accounts FOR VALUES FROM (25000000) TO (30000000);
+CREATE TABLE accounts_30000000_35000000 PARTITION OF accounts FOR VALUES FROM (30000000) TO (35000000);
+CREATE TABLE accounts_35000000_40000000 PARTITION OF accounts FOR VALUES FROM (35000000) TO (40000000);
+CREATE TABLE accounts_40000000_45000000 PARTITION OF accounts FOR VALUES FROM (40000000) TO (45000000);
+CREATE TABLE accounts_45000000_50000000 PARTITION OF accounts FOR VALUES FROM (45000000) TO (50000000);
 
-	"block_height" "pg_catalog"."int8_ops" ASC NULLS LAST,
-	"account_address" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+CREATE UNIQUE INDEX idx_accounts_block_height_account_address
+ON accounts(block_height, account_address);
 
-);
-CREATE INDEX "accounts_block_height_idx" ON "public"."accounts" USING btree (
+CREATE INDEX "idx_accounts_block_height" ON accounts("block_height");
 
-	"block_height" "pg_catalog"."int8_ops" ASC NULLS LAST
-
-);
-
--- ----------------------------
--- Primary Key structure for table accounts
--- ----------------------------
 ALTER TABLE "public"."accounts" ADD CONSTRAINT "account_balance_pkey" PRIMARY KEY ("id");
 */
 func StoreAccount(sm protocol.StateManager, addr address.Address, account *state.Account) error {

@@ -12,13 +12,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/iotexproject/iotex-address/address"
 	"github.com/stretchr/testify/require"
 
 	"github.com/iotexproject/iotex-core/pkg/version"
 )
 
+func TestBuilderEthAddr(t *testing.T) {
+	r := require.New(t)
+
+	r.Equal(address.StakingProtocolAddrHash[:], _stakingProtocolEthAddr.Bytes())
+	r.Equal(address.RewardingProtocolAddrHash[:], _rewardingProtocolEthAddr.Bytes())
+}
+
 func TestActionBuilder(t *testing.T) {
+	r := require.New(t)
+
 	bd := &Builder{}
 	act := bd.SetVersion(version.ProtocolVersion).
 		SetNonce(2).
@@ -26,10 +35,10 @@ func TestActionBuilder(t *testing.T) {
 		SetGasPrice(big.NewInt(10004)).
 		Build()
 
-	assert.Equal(t, uint32(version.ProtocolVersion), act.Version())
-	assert.Equal(t, uint64(2), act.Nonce())
-	assert.Equal(t, uint64(10003), act.GasLimit())
-	assert.Equal(t, big.NewInt(10004), act.GasPrice())
+	r.Equal(uint32(version.ProtocolVersion), act.Version())
+	r.Equal(uint64(2), act.Nonce())
+	r.Equal(uint64(10003), act.GasLimit())
+	r.Equal(big.NewInt(10004), act.GasPrice())
 }
 
 func TestBuildRewardingAction(t *testing.T) {
@@ -39,14 +48,26 @@ func TestBuildRewardingAction(t *testing.T) {
 	eb.SetChainID(2)
 
 	claimData, _ := hex.DecodeString("2df163ef000000000000000000000000000000000000000000000000000000000000006500000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000")
-	tx := types.NewTransaction(1, common.HexToAddress("0x0000000000000000000000000000000000000001"), big.NewInt(100), 10000, big.NewInt(10004), claimData)
-
-	env, err := eb.BuildRewardingAction(tx)
+	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
+	env, err := eb.BuildRewardingAction(types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(10004),
+		Gas:      10000,
+		To:       &to,
+		Value:    big.NewInt(100),
+		Data:     claimData,
+	}))
 	r.Nil(env)
 	r.EqualValues("invalid action type", err.Error())
 
-	tx = types.NewTransaction(1, common.HexToAddress(_rewardingProtocolAddr.Hex()), big.NewInt(100), 10000, big.NewInt(10004), claimData)
-	env, err = eb.BuildRewardingAction(tx)
+	env, err = eb.BuildRewardingAction(types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(10004),
+		Gas:      10000,
+		To:       &_rewardingProtocolEthAddr,
+		Value:    big.NewInt(100),
+		Data:     claimData,
+	}))
 	r.Nil(err)
 	r.IsType(&ClaimFromRewardingFund{}, env.Action())
 	r.EqualValues(big.NewInt(10004), env.GasPrice())
@@ -54,14 +75,26 @@ func TestBuildRewardingAction(t *testing.T) {
 	r.EqualValues(big.NewInt(101), env.Action().(*ClaimFromRewardingFund).Amount())
 
 	depositData, _ := hex.DecodeString("27852a6b000000000000000000000000000000000000000000000000000000000000006500000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003")
-	tx = types.NewTransaction(1, common.HexToAddress("0x0000000000000000000000000000000000000001"), big.NewInt(100), 10000, big.NewInt(10004), depositData)
-
-	env, err = eb.BuildRewardingAction(tx)
+	to = common.HexToAddress("0x0000000000000000000000000000000000000001")
+	env, err = eb.BuildRewardingAction(types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(10004),
+		Gas:      10000,
+		To:       &to,
+		Value:    big.NewInt(100),
+		Data:     depositData,
+	}))
 	r.Nil(env)
 	r.EqualValues("invalid action type", err.Error())
 
-	tx = types.NewTransaction(1, common.HexToAddress(_rewardingProtocolAddr.Hex()), big.NewInt(100), 10000, big.NewInt(10004), depositData)
-	env, err = eb.BuildRewardingAction(tx)
+	env, err = eb.BuildRewardingAction(types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(10004),
+		Gas:      10000,
+		To:       &_rewardingProtocolEthAddr,
+		Value:    big.NewInt(100),
+		Data:     depositData,
+	}))
 	r.Nil(err)
 	r.IsType(&DepositToRewardingFund{}, env.Action())
 	r.EqualValues(big.NewInt(10004), env.GasPrice())

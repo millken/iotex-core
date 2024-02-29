@@ -98,11 +98,8 @@ func (p *Protocol) GrantBlockReward(
 		return nil, nil
 	}
 	rewardAddr, err := address.FromString(rewardAddrStr)
-	fCtx := protocol.MustGetFeatureCtx(ctx)
-	if fCtx.FixRewardErroCheckPosition {
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
 
 	a := admin{}
@@ -111,11 +108,6 @@ func (p *Protocol) GrantBlockReward(
 	}
 	if err := p.updateAvailableBalance(ctx, sm, a.blockReward); err != nil {
 		return nil, err
-	}
-	if !fCtx.FixRewardErroCheckPosition {
-		if err != nil {
-			return nil, err
-		}
 	}
 	if err := p.grantToAccount(ctx, sm, rewardAddr, a.blockReward); err != nil {
 		return nil, err

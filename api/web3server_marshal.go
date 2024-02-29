@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/iotexproject/go-pkgs/crypto"
 	"github.com/iotexproject/go-pkgs/hash"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/iotexproject/iotex-core/action"
+	apitypes "github.com/iotexproject/iotex-core/api/types"
 	"github.com/iotexproject/iotex-core/blockchain/block"
 )
 
@@ -28,8 +30,9 @@ type (
 	}
 
 	errMessage struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int         `json:"code"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data,omitempty"`
 	}
 
 	streamResponse struct {
@@ -48,12 +51,11 @@ type (
 	}
 
 	getTransactionResult struct {
-		blockHash hash.Hash256
+		blockHash *hash.Hash256
 		to        *string
 		ethTx     *types.Transaction
 		receipt   *action.Receipt
 		pubkey    crypto.PublicKey
-		signature []byte
 	}
 
 	getReceiptResult struct {
@@ -74,6 +76,14 @@ type (
 		StartingBlock string `json:"startingBlock"`
 		CurrentBlock  string `json:"currentBlock"`
 		HighestBlock  string `json:"highestBlock"`
+	}
+
+	debugTraceTransactionResult struct {
+		Failed      bool                 `json:"failed"`
+		Revert      string               `json:"revert"`
+		ReturnValue string               `json:"returnValue"`
+		Gas         uint64               `json:"gas"`
+		StructLogs  []apitypes.StructLog `json:"structLogs"`
 	}
 )
 
@@ -115,6 +125,7 @@ func (obj *web3Response) MarshalJSON() ([]byte, error) {
 		Error: errMessage{
 			Code:    errCode,
 			Message: errMsg,
+			Data:    obj.result,
 		},
 	})
 }
@@ -211,23 +222,40 @@ func (obj *getBlockResult) MarshalJSON() ([]byte, error) {
 }
 
 func (obj *getTransactionResult) MarshalJSON() ([]byte, error) {
-	if obj.receipt == nil || obj.pubkey == nil || obj.ethTx == nil {
+	if obj.pubkey == nil || obj.ethTx == nil {
 		return nil, errInvalidObject
 	}
-	value, _ := intStrToHex(obj.ethTx.Value().String())
-	gasPrice, _ := intStrToHex(obj.ethTx.GasPrice().String())
+	var (
+		value, _    = intStrToHex(obj.ethTx.Value().String())
+		gasPrice, _ = intStrToHex(obj.ethTx.GasPrice().String())
+		v, r, s     = obj.ethTx.RawSignatureValues()
+		txHash      = obj.ethTx.Hash().Bytes()
+		blkNum      *string
+		txIndex     *string
+		blkHash     *string
+	)
 
-	vVal := uint64(obj.signature[64])
-	if vVal < 27 {
-		vVal += 27
+	if obj.receipt != nil {
+		txHash = obj.receipt.ActionHash[:]
 	}
-
+	if obj.receipt != nil {
+		tmp := uint64ToHex(obj.receipt.BlockHeight)
+		blkNum = &tmp
+	}
+	if obj.receipt != nil {
+		tmp := uint64ToHex(uint64(obj.receipt.TxIndex))
+		txIndex = &tmp
+	}
+	if obj.blockHash != nil {
+		tmp := "0x" + hex.EncodeToString(obj.blockHash[:])
+		blkHash = &tmp
+	}
 	return json.Marshal(&struct {
 		Hash             string  `json:"hash"`
 		Nonce            string  `json:"nonce"`
-		BlockHash        string  `json:"blockHash"`
-		BlockNumber      string  `json:"blockNumber"`
-		TransactionIndex string  `json:"transactionIndex"`
+		BlockHash        *string `json:"blockHash"`
+		BlockNumber      *string `json:"blockNumber"`
+		TransactionIndex *string `json:"transactionIndex"`
 		From             string  `json:"from"`
 		To               *string `json:"to"`
 		Value            string  `json:"value"`
@@ -238,20 +266,20 @@ func (obj *getTransactionResult) MarshalJSON() ([]byte, error) {
 		S                string  `json:"s"`
 		V                string  `json:"v"`
 	}{
-		Hash:             "0x" + hex.EncodeToString(obj.receipt.ActionHash[:]),
+		Hash:             "0x" + hex.EncodeToString(txHash),
 		Nonce:            uint64ToHex(obj.ethTx.Nonce()),
-		BlockHash:        "0x" + hex.EncodeToString(obj.blockHash[:]),
-		BlockNumber:      uint64ToHex(obj.receipt.BlockHeight),
-		TransactionIndex: uint64ToHex(uint64(obj.receipt.TxIndex)),
+		BlockHash:        blkHash,
+		BlockNumber:      blkNum,
+		TransactionIndex: txIndex,
 		From:             obj.pubkey.Address().Hex(),
 		To:               obj.to,
 		Value:            value,
 		GasPrice:         gasPrice,
 		Gas:              uint64ToHex(obj.ethTx.Gas()),
 		Input:            byteToHex(obj.ethTx.Data()),
-		R:                byteToHex(obj.signature[:32]),
-		S:                byteToHex(obj.signature[32:64]),
-		V:                uint64ToHex(vVal),
+		R:                hexutil.EncodeBig(r),
+		S:                hexutil.EncodeBig(s),
+		V:                hexutil.EncodeBig(v),
 	})
 }
 

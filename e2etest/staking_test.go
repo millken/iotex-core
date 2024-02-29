@@ -22,6 +22,7 @@ import (
 
 	"github.com/iotexproject/iotex-core/action"
 	"github.com/iotexproject/iotex-core/action/protocol"
+	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/action/protocol/poll"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/config"
@@ -121,7 +122,11 @@ func TestStakingContract(t *testing.T) {
 				return nil, err
 			}
 
-			data, _, err := sf.SimulateExecution(ctx, addr, ex, dao.GetBlockHash)
+			ctx = evm.WithHelperCtx(ctx, evm.HelperContext{
+				GetBlockHash: dao.GetBlockHash,
+				GetBlockTime: fakeGetBlockTime,
+			})
+			data, _, err := sf.SimulateExecution(ctx, addr, ex)
 
 			return data, err
 		})
@@ -188,9 +193,13 @@ func TestStakingContract(t *testing.T) {
 	require.NoError(err)
 	testCandidateIndexPath, err := testutil.PathOfTempFile("candidateindex")
 	require.NoError(err)
+	testContractStakeIndexPath, err := testutil.PathOfTempFile("contractindex")
+	require.NoError(err)
 	testSystemLogPath, err := testutil.PathOfTempFile("systemlog")
 	require.NoError(err)
 	testConsensusPath, err := testutil.PathOfTempFile("consensus")
+	require.NoError(err)
+	testSGDIndexPath, err := testutil.PathOfTempFile("sgdIndex")
 	require.NoError(err)
 	defer func() {
 		testutil.CleanupPath(testTriePath)
@@ -200,6 +209,8 @@ func TestStakingContract(t *testing.T) {
 		testutil.CleanupPath(testCandidateIndexPath)
 		testutil.CleanupPath(testSystemLogPath)
 		testutil.CleanupPath(testConsensusPath)
+		testutil.CleanupPath(testContractStakeIndexPath)
+		testutil.CleanupPath(testSGDIndexPath)
 		// clear the gateway
 		delete(cfg.Plugins, config.GatewayPlugin)
 	}()
@@ -209,8 +220,10 @@ func TestStakingContract(t *testing.T) {
 	cfg.Chain.TrieDBPath = testTriePath
 	cfg.Chain.ChainDBPath = testDBPath
 	cfg.Chain.IndexDBPath = testIndexPath
+	cfg.Chain.SGDIndexDBPath = testSGDIndexPath
 	cfg.Chain.BloomfilterIndexDBPath = testBloomfilterIndexPath
 	cfg.Chain.CandidateIndexDBPath = testCandidateIndexPath
+	cfg.Chain.ContractStakingIndexDBPath = testContractStakeIndexPath
 	cfg.System.SystemLogDBPath = testSystemLogPath
 	cfg.Consensus.RollDPoS.ConsensusDBPath = testConsensusPath
 	cfg.Chain.ProducerPrivKey = "a000000000000000000000000000000000000000000000000000000000000000"

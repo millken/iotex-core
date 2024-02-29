@@ -51,6 +51,7 @@ const (
 	_bucket
 	_voterIndex
 	_candIndex
+	_endorsement
 )
 
 // Errors
@@ -74,22 +75,24 @@ type (
 
 	// Protocol defines the protocol of handling staking
 	Protocol struct {
-		addr               address.Address
-		depositGas         DepositGas
-		config             Configuration
-		candBucketsIndexer *CandidatesBucketsIndexer
-		voteReviser        *VoteReviser
-		patch              *PatchStore
+		addr                   address.Address
+		depositGas             DepositGas
+		config                 Configuration
+		candBucketsIndexer     *CandidatesBucketsIndexer
+		contractStakingIndexer ContractStakingIndexer
+		voteReviser            *VoteReviser
+		patch                  *PatchStore
 	}
 
 	// Configuration is the staking protocol configuration.
 	Configuration struct {
-		VoteWeightCalConsts      genesis.VoteWeightCalConsts
-		RegistrationConsts       RegistrationConsts
-		WithdrawWaitingPeriod    time.Duration
-		MinStakeAmount           *big.Int
-		BootstrapCandidates      []genesis.BootstrapCandidate
-		PersistStakingPatchBlock uint64
+		VoteWeightCalConsts              genesis.VoteWeightCalConsts
+		RegistrationConsts               RegistrationConsts
+		WithdrawWaitingPeriod            time.Duration
+		MinStakeAmount                   *big.Int
+		BootstrapCandidates              []genesis.BootstrapCandidate
+		PersistStakingPatchBlock         uint64
+		EndorsementWithdrawWaitingBlocks uint64
 	}
 
 	// DepositGas deposits gas to some pool
@@ -117,6 +120,7 @@ func NewProtocol(
 	depositGas DepositGas,
 	cfg *BuilderConfig,
 	candBucketsIndexer *CandidatesBucketsIndexer,
+	contractStakingIndexer ContractStakingIndexer,
 	correctCandsHeight uint64,
 	reviseHeights ...uint64,
 ) (*Protocol, error) {
@@ -152,15 +156,17 @@ func NewProtocol(
 				Fee:          regFee,
 				MinSelfStake: minSelfStake,
 			},
-			WithdrawWaitingPeriod:    cfg.Staking.WithdrawWaitingPeriod,
-			MinStakeAmount:           minStakeAmount,
-			BootstrapCandidates:      cfg.Staking.BootstrapCandidates,
-			PersistStakingPatchBlock: cfg.PersistStakingPatchBlock,
+			WithdrawWaitingPeriod:            cfg.Staking.WithdrawWaitingPeriod,
+			MinStakeAmount:                   minStakeAmount,
+			BootstrapCandidates:              cfg.Staking.BootstrapCandidates,
+			PersistStakingPatchBlock:         cfg.PersistStakingPatchBlock,
+			EndorsementWithdrawWaitingBlocks: cfg.Staking.EndorsementWithdrawWaitingBlocks,
 		},
-		depositGas:         depositGas,
-		candBucketsIndexer: candBucketsIndexer,
-		voteReviser:        voteReviser,
-		patch:              NewPatchStore(cfg.StakingPatchDir),
+		depositGas:             depositGas,
+		candBucketsIndexer:     candBucketsIndexer,
+		voteReviser:            voteReviser,
+		patch:                  NewPatchStore(cfg.StakingPatchDir),
+		contractStakingIndexer: contractStakingIndexer,
 	}, nil
 }
 
@@ -414,6 +420,10 @@ func (p *Protocol) handle(ctx context.Context, act action.Action, csm CandidateS
 		rLog, tLogs, err = p.handleCandidateRegister(ctx, act, csm)
 	case *action.CandidateUpdate:
 		rLog, err = p.handleCandidateUpdate(ctx, act, csm)
+	case *action.CandidateActivate:
+		rLog, tLogs, err = p.handleCandidateActivate(ctx, act, csm)
+	case *action.CandidateEndorsement:
+		rLog, tLogs, err = p.handleCandidateEndorsement(ctx, act, csm)
 	default:
 		return nil, nil
 	}
@@ -464,14 +474,28 @@ func (p *Protocol) Validate(ctx context.Context, act action.Action, sr protocol.
 
 // ActiveCandidates returns all active candidates in candidate center
 func (p *Protocol) ActiveCandidates(ctx context.Context, sr protocol.StateReader, height uint64) (state.CandidateList, error) {
+	srHeight, err := sr.Height()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get StateReader height")
+	}
 	c, err := ConstructBaseView(sr)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get ActiveCandidates")
 	}
-
 	list := c.AllCandidates()
 	cand := make(CandidateList, 0, len(list))
+	featureCtx := protocol.MustGetFeatureCtx(ctx)
 	for i := range list {
+		if p.contractStakingIndexer != nil && featureCtx.AddContractStakingVotes {
+			// specifying the height param instead of query latest from indexer directly, aims to cause error when indexer falls behind
+			// currently there are two possible sr (i.e. factory or workingSet), it means the height could be chain height or current block height
+			// using height-1 will cover the two scenario while detect whether the indexer is lagging behind
+			contractVotes, err := p.contractStakingIndexer.CandidateVotes(ctx, list[i].Owner, srHeight-1)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get CandidateVotes from contractStakingIndexer")
+			}
+			list[i].Votes.Add(list[i].Votes, contractVotes)
+		}
 		if list[i].SelfStake.Cmp(p.config.RegistrationConsts.MinSelfStake) >= 0 {
 			cand = append(cand, list[i])
 		}
@@ -493,7 +517,8 @@ func (p *Protocol) ReadState(ctx context.Context, sr protocol.StateReader, metho
 		return nil, uint64(0), errors.Wrap(err, "failed to unmarshal request")
 	}
 
-	csr, err := ConstructBaseView(sr)
+	// stakeSR is the stake state reader including native and contract staking
+	stakeSR, err := newCompositeStakingStateReader(p.contractStakingIndexer, p.candBucketsIndexer, sr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -505,6 +530,10 @@ func (p *Protocol) ReadState(ctx context.Context, sr protocol.StateReader, metho
 	}
 	rp := rolldpos.MustGetProtocol(protocol.MustGetRegistry(ctx))
 	epochStartHeight := rp.GetEpochHeight(rp.GetEpochNum(inputHeight))
+	nativeSR, err := ConstructBaseView(sr)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	var (
 		height uint64
@@ -513,28 +542,40 @@ func (p *Protocol) ReadState(ctx context.Context, sr protocol.StateReader, metho
 	switch m.GetMethod() {
 	case iotexapi.ReadStakingDataMethod_BUCKETS:
 		if epochStartHeight != 0 && p.candBucketsIndexer != nil {
-			return p.candBucketsIndexer.GetBuckets(epochStartHeight, r.GetBuckets().GetPagination().GetOffset(), r.GetBuckets().GetPagination().GetLimit())
+			resp, height, err = p.candBucketsIndexer.GetBuckets(epochStartHeight, r.GetBuckets().GetPagination().GetOffset(), r.GetBuckets().GetPagination().GetLimit())
+		} else {
+			resp, height, err = nativeSR.readStateBuckets(ctx, r.GetBuckets())
 		}
-		resp, height, err = csr.readStateBuckets(ctx, r.GetBuckets())
 	case iotexapi.ReadStakingDataMethod_BUCKETS_BY_VOTER:
-		resp, height, err = csr.readStateBucketsByVoter(ctx, r.GetBucketsByVoter())
+		resp, height, err = nativeSR.readStateBucketsByVoter(ctx, r.GetBucketsByVoter())
 	case iotexapi.ReadStakingDataMethod_BUCKETS_BY_CANDIDATE:
-		resp, height, err = csr.readStateBucketsByCandidate(ctx, r.GetBucketsByCandidate())
+		resp, height, err = nativeSR.readStateBucketsByCandidate(ctx, r.GetBucketsByCandidate())
 	case iotexapi.ReadStakingDataMethod_BUCKETS_BY_INDEXES:
-		resp, height, err = csr.readStateBucketByIndices(ctx, r.GetBucketsByIndexes())
+		resp, height, err = nativeSR.readStateBucketByIndices(ctx, r.GetBucketsByIndexes())
 	case iotexapi.ReadStakingDataMethod_BUCKETS_COUNT:
-		resp, height, err = csr.readStateBucketCount(ctx, r.GetBucketsCount())
+		resp, height, err = nativeSR.readStateBucketCount(ctx, r.GetBucketsCount())
 	case iotexapi.ReadStakingDataMethod_CANDIDATES:
-		if epochStartHeight != 0 && p.candBucketsIndexer != nil {
-			return p.candBucketsIndexer.GetCandidates(epochStartHeight, r.GetCandidates().GetPagination().GetOffset(), r.GetCandidates().GetPagination().GetLimit())
-		}
-		resp, height, err = csr.readStateCandidates(ctx, r.GetCandidates())
+		resp, height, err = stakeSR.readStateCandidates(ctx, r.GetCandidates())
 	case iotexapi.ReadStakingDataMethod_CANDIDATE_BY_NAME:
-		resp, height, err = csr.readStateCandidateByName(ctx, r.GetCandidateByName())
+		resp, height, err = stakeSR.readStateCandidateByName(ctx, r.GetCandidateByName())
 	case iotexapi.ReadStakingDataMethod_CANDIDATE_BY_ADDRESS:
-		resp, height, err = csr.readStateCandidateByAddress(ctx, r.GetCandidateByAddress())
+		resp, height, err = stakeSR.readStateCandidateByAddress(ctx, r.GetCandidateByAddress())
 	case iotexapi.ReadStakingDataMethod_TOTAL_STAKING_AMOUNT:
-		resp, height, err = csr.readStateTotalStakingAmount(ctx, r.GetTotalStakingAmount())
+		resp, height, err = nativeSR.readStateTotalStakingAmount(ctx, r.GetTotalStakingAmount())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_BUCKETS:
+		resp, height, err = stakeSR.readStateBuckets(ctx, r.GetBuckets())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_BUCKETS_BY_VOTER:
+		resp, height, err = stakeSR.readStateBucketsByVoter(ctx, r.GetBucketsByVoter())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_BUCKETS_BY_CANDIDATE:
+		resp, height, err = stakeSR.readStateBucketsByCandidate(ctx, r.GetBucketsByCandidate())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_BUCKETS_BY_INDEXES:
+		resp, height, err = stakeSR.readStateBucketByIndices(ctx, r.GetBucketsByIndexes())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_BUCKETS_COUNT:
+		resp, height, err = stakeSR.readStateBucketCount(ctx, r.GetBucketsCount())
+	case iotexapi.ReadStakingDataMethod_COMPOSITE_TOTAL_STAKING_AMOUNT:
+		resp, height, err = stakeSR.readStateTotalStakingAmount(ctx, r.GetTotalStakingAmount())
+	case iotexapi.ReadStakingDataMethod_CONTRACT_STAKING_BUCKET_TYPES:
+		resp, height, err = stakeSR.readStateContractStakingBucketTypes(ctx, r.GetContractStakingBucketTypes())
 	default:
 		err = errors.New("corresponding method isn't found")
 	}
@@ -564,7 +605,7 @@ func (p *Protocol) Name() string {
 }
 
 func (p *Protocol) calculateVoteWeight(v *VoteBucket, selfStake bool) *big.Int {
-	return calculateVoteWeight(p.config.VoteWeightCalConsts, v, selfStake)
+	return CalculateVoteWeight(p.config.VoteWeightCalConsts, v, selfStake)
 }
 
 // settleAccount deposits gas fee and updates caller's nonce

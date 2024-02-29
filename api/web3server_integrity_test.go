@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/iotexproject/go-pkgs/util"
 	"github.com/iotexproject/iotex-address/address"
+	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 	"github.com/stretchr/testify/require"
 
 	"github.com/iotexproject/iotex-core/action"
@@ -42,7 +43,7 @@ func TestWeb3ServerIntegrity(t *testing.T) {
 	ctx := context.Background()
 	web3svr.Start(ctx)
 	defer web3svr.Stop(ctx)
-	handler := newHTTPHandler(NewWeb3Handler(svr.core, ""))
+	handler := newHTTPHandler(NewWeb3Handler(svr.core, "", _defaultBatchRequestLimit))
 
 	// send request
 	t.Run("eth_gasPrice", func(t *testing.T) {
@@ -685,15 +686,18 @@ func web3Staking(t *testing.T, handler *hTTPHandler) {
 		require.NoError(err)
 
 		// create tx
-		rawTx := types.NewTransaction(
-			uint64(9+i),
-			common.HexToAddress(toAddr),
-			big.NewInt(0),
-			gasLimit,
-			big.NewInt(0),
-			test.data,
-		)
-		tx, err := types.SignTx(rawTx, types.NewEIP155Signer(big.NewInt(int64(_evmNetworkID))), ecdsaPvk)
+		to := common.HexToAddress(toAddr)
+		rawTx := types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(9 + i),
+			GasPrice: big.NewInt(0),
+			Gas:      gasLimit,
+			To:       &to,
+			Value:    big.NewInt(0),
+			Data:     test.data,
+		})
+		signer, err := action.NewEthSigner(iotextypes.Encoding_ETHEREUM_EIP155, _evmNetworkID)
+		require.NoError(err)
+		tx, err := types.SignTx(rawTx, signer, ecdsaPvk)
 		require.NoError(err)
 		BinaryData, err := tx.MarshalBinary()
 		require.NoError(err)
@@ -702,16 +706,19 @@ func web3Staking(t *testing.T, handler *hTTPHandler) {
 		result = serveTestHTTP(require, handler, "eth_sendRawTransaction", fmt.Sprintf(`["%s"]`, hex.EncodeToString(BinaryData)))
 		ret, ok := result.(string)
 		require.True(ok)
-		require.Equal(64, len(util.Remove0xPrefix(ret)))
+		require.Equal(tx.Hash().Hex(), ret)
 	}
 }
 
 func sendRawTransaction(t *testing.T, handler *hTTPHandler) {
 	require := require.New(t)
-	result := serveTestHTTP(require, handler, "eth_sendRawTransaction", `["f8600180830186a09412745fec82b585f239c01090882eb40702c32b04808025a0b0e1aab5b64d744ae01fc9f1c3e9919844a799e90c23129d611f7efe6aec8a29a0195e28d22d9b280e00d501ff63525bb76f5c87b8646c89d5d9c5485edcb1b498"]`)
+	rawData := "0xf8600180830186a09412745fec82b585f239c01090882eb40702c32b04808025a0b0e1aab5b64d744ae01fc9f1c3e9919844a799e90c23129d611f7efe6aec8a29a0195e28d22d9b280e00d501ff63525bb76f5c87b8646c89d5d9c5485edcb1b498"
+	tx, err := action.DecodeEtherTx(rawData)
+	require.NoError(err)
+	result := serveTestHTTP(require, handler, "eth_sendRawTransaction", fmt.Sprintf(`["%s"]`, rawData))
 	actual, ok := result.(string)
 	require.True(ok)
-	require.Equal("0x778fd5a054e74e9055bf68ef5f9d559fa306e8ba7dee608d0a3624cca0b63b3e", actual)
+	require.Equal(tx.Hash().Hex(), actual)
 }
 
 func estimateGas(t *testing.T, handler *hTTPHandler, bc blockchain.Blockchain, dao blockdao.BlockDAO, actPool actpool.ActPool) {

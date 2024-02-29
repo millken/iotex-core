@@ -15,13 +15,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/iotexproject/go-pkgs/hash"
-	"github.com/iotexproject/go-pkgs/util"
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-proto/golang/iotexapi"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
@@ -39,7 +38,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/iotexproject/iotex-core/action"
-	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/api/logfilter"
 	apitypes "github.com/iotexproject/iotex-core/api/types"
 	"github.com/iotexproject/iotex-core/blockchain/block"
@@ -68,8 +66,9 @@ var (
 		PermitWithoutStream: true,            // Allow pings even when there are no active streams
 	}
 	kasp = keepalive.ServerParameters{
-		Time:    60 * time.Second, // Ping the client if it is idle for 60 seconds to ensure the connection is still active
-		Timeout: 10 * time.Second, // Wait 10 seconds for the ping ack before assuming the connection is dead
+		Time:              60 * time.Second, // Ping the client if it is idle for 60 seconds to ensure the connection is still active
+		Timeout:           10 * time.Second, // Wait 10 seconds for the ping ack before assuming the connection is dead
+		MaxConnectionIdle: 5 * time.Minute,  // If a client is idle for 5 minutes, send a GOAWAY
 	}
 )
 
@@ -404,6 +403,17 @@ func (svr *gRPCHandler) EstimateActionGasConsumption(ctx context.Context, in *io
 		if err := sc.LoadProto(in.GetExecution()); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		var (
+			gasPrice *big.Int = big.NewInt(0)
+			ok       bool
+		)
+		if in.GetGasPrice() != "" {
+			gasPrice, ok = big.NewInt(0).SetString(in.GetGasPrice(), 10)
+			if !ok {
+				return nil, status.Error(codes.InvalidArgument, "invalid gas price")
+			}
+		}
+		sc.SetGasPrice(gasPrice)
 		ret, err := svr.coreService.EstimateExecutionGasConsumption(ctx, sc, callerAddr)
 		if err != nil {
 			return nil, err
@@ -549,8 +559,8 @@ func (svr *gRPCHandler) StreamBlocks(_ *iotexapi.StreamBlocksRequest, stream iot
 	defer close(errChan)
 	chainListener := svr.coreService.ChainListener()
 	if _, err := chainListener.AddResponder(NewGRPCBlockListener(
-		func(resp interface{}) error {
-			return stream.Send(resp.(*iotexapi.StreamBlocksResponse))
+		func(resp interface{}) (int, error) {
+			return 0, stream.Send(resp.(*iotexapi.StreamBlocksResponse))
 		},
 		errChan,
 	)); err != nil {
@@ -573,8 +583,8 @@ func (svr *gRPCHandler) StreamLogs(in *iotexapi.StreamLogsRequest, stream iotexa
 	chainListener := svr.coreService.ChainListener()
 	if _, err := chainListener.AddResponder(NewGRPCLogListener(
 		logfilter.NewLogFilter(in.GetFilter()),
-		func(in interface{}) error {
-			return stream.Send(in.(*iotexapi.StreamLogsResponse))
+		func(in interface{}) (int, error) {
+			return 0, stream.Send(in.(*iotexapi.StreamLogsResponse))
 		},
 		errChan,
 	)); err != nil {
@@ -659,32 +669,22 @@ func (svr *gRPCHandler) ReadContractStorage(ctx context.Context, in *iotexapi.Re
 
 // TraceTransactionStructLogs get trace transaction struct logs
 func (svr *gRPCHandler) TraceTransactionStructLogs(ctx context.Context, in *iotexapi.TraceTransactionStructLogsRequest) (*iotexapi.TraceTransactionStructLogsResponse, error) {
-	actInfo, err := svr.coreService.Action(util.Remove0xPrefix(in.GetActionHash()), false)
+	cfg := &tracers.TraceConfig{
+		Config: &logger.Config{
+			EnableMemory:     true,
+			DisableStack:     false,
+			DisableStorage:   false,
+			EnableReturnData: true,
+		},
+	}
+	_, _, tracer, err := svr.coreService.TraceTransaction(ctx, in.GetActionHash(), cfg)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	act, err := (&action.Deserializer{}).SetEvmNetworkID(svr.coreService.EVMNetworkID()).ActionToSealedEnvelope(actInfo.Action)
-	if err != nil {
-		return nil, err
-	}
-	sc, ok := act.Action().(*action.Execution)
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "the type of action is not supported")
-	}
-	tracer := logger.NewStructLogger(nil)
-	ctx = protocol.WithVMConfigCtx(ctx, vm.Config{
-		Debug:     true,
-		Tracer:    tracer,
-		NoBaseFee: true,
-	})
-
-	_, _, err = svr.coreService.SimulateExecution(ctx, act.SenderAddress(), sc)
-	if err != nil {
-		return nil, err
-	}
-
 	structLogs := make([]*iotextypes.TransactionStructLog, 0)
-	for _, log := range tracer.StructLogs() {
+	//grpc not support javascript tracing, so we only return native traces
+	traces := tracer.(*logger.StructLogger)
+	for _, log := range traces.StructLogs() {
 		var stack []string
 		for _, s := range log.Stack {
 			stack = append(stack, s.String())
@@ -749,7 +749,7 @@ func generateBlockMeta(blkStore *apitypes.BlockWithReceipts) *iotextypes.BlockMe
 	return &blockMeta
 }
 
-func gasLimitAndUsed(acts []action.SealedEnvelope, receipts []*action.Receipt) (uint64, uint64) {
+func gasLimitAndUsed(acts []*action.SealedEnvelope, receipts []*action.Receipt) (uint64, uint64) {
 	var gasLimit, gasUsed uint64
 	for _, tx := range acts {
 		gasLimit += tx.GasLimit()

@@ -109,8 +109,8 @@ func (p *Protocol) CreatePreStates(ctx context.Context, sm protocol.StateManager
 		return p.SetReward(ctx, sm, g.DardanellesBlockReward(), true)
 	case g.GreenlandBlockHeight:
 		return p.migrateValueGreenland(ctx, sm)
-	case g.KamchatkaBlockHeight:
-		return p.setFoundationBonusExtension(ctx, sm)
+		// case g.KamchatkaBlockHeight:
+		// 	return p.setFoundationBonusExtension(ctx, sm)
 	}
 	return nil
 }
@@ -184,9 +184,6 @@ func createGrantRewardAction(rewardType int, height uint64) action.Envelope {
 
 // Validate validates a reward action
 func (p *Protocol) Validate(ctx context.Context, act action.Action, sr protocol.StateReader) error {
-	if !protocol.MustGetFeatureCtx(ctx).ValidateRewardProtocol {
-		return nil
-	}
 	switch act.(type) {
 	case *action.GrantReward:
 		actionCtx := protocol.MustGetActionCtx(ctx)

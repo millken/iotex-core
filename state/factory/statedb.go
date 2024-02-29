@@ -228,7 +228,7 @@ func (sdb *stateDB) Validate(ctx context.Context, blk *block.Block) error {
 func (sdb *stateDB) NewBlockBuilder(
 	ctx context.Context,
 	ap actpool.ActPool,
-	sign func(action.Envelope) (action.SealedEnvelope, error),
+	sign func(action.Envelope) (*action.SealedEnvelope, error),
 ) (*block.Builder, error) {
 	ctx = protocol.WithRegistry(ctx, sdb.registry)
 	sdb.mutex.RLock()
@@ -238,21 +238,17 @@ func (sdb *stateDB) NewBlockBuilder(
 	if err != nil {
 		return nil, err
 	}
-	postSystemActions := make([]action.SealedEnvelope, 0)
-	for _, p := range sdb.registry.All() {
-		if psac, ok := p.(protocol.PostSystemActionsCreator); ok {
-			elps, err := psac.CreatePostSystemActions(ctx, ws)
-			if err != nil {
-				return nil, err
-			}
-			for _, elp := range elps {
-				se, err := sign(elp)
-				if err != nil {
-					return nil, err
-				}
-				postSystemActions = append(postSystemActions, se)
-			}
+	postSystemActions := make([]*action.SealedEnvelope, 0)
+	unsignedSystemActions, err := ws.generateSystemActions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, elp := range unsignedSystemActions {
+		se, err := sign(elp)
+		if err != nil {
+			return nil, err
 		}
+		postSystemActions = append(postSystemActions, se)
 	}
 	blkBuilder, err := ws.CreateBuilder(ctx, ap, postSystemActions, sdb.cfg.Chain.AllowedBlockGasResidue)
 	if err != nil {
@@ -271,7 +267,6 @@ func (sdb *stateDB) SimulateExecution(
 	ctx context.Context,
 	caller address.Address,
 	ex *action.Execution,
-	getBlockHash evm.GetBlockHash,
 ) ([]byte, *action.Receipt, error) {
 	ctx, span := tracer.NewSpan(ctx, "stateDB.SimulateExecution")
 	defer span.End()
@@ -284,7 +279,7 @@ func (sdb *stateDB) SimulateExecution(
 		return nil, nil, err
 	}
 
-	return evm.SimulateExecution(ctx, ws, caller, ex, getBlockHash)
+	return evm.SimulateExecution(ctx, ws, caller, ex)
 }
 
 // ReadContractStorage reads contract's storage

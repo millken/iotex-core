@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/golang/mock/gomock"
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-proto/golang/iotexapi"
@@ -983,7 +984,7 @@ func TestGrpcServer_GetActPoolActions(t *testing.T) {
 	require.NoError(err)
 	tsf2, err := action.SignedTransfer(addr1, priKey1, uint64(2), big.NewInt(20), []byte{}, uint64(100000), big.NewInt(0))
 	require.NoError(err)
-	acts := []action.SealedEnvelope{tsf1, tsf2}
+	acts := []*action.SealedEnvelope{tsf1, tsf2}
 	core.EXPECT().ActionsInActPool(gomock.Any()).Return(acts, nil)
 	resp, err := grpcSvr.GetActPoolActions(context.Background(), &iotexapi.GetActPoolActionsRequest{
 		ActionHashes: []string{"_actionHash"},
@@ -1019,18 +1020,7 @@ func TestGrpcServer_TraceTransactionStructLogs(t *testing.T) {
 	core := mock_apicoreservice.NewMockCoreService(ctrl)
 	grpcSvr := newGRPCHandler(core)
 
-	addr1 := identityset.Address(28).String()
-	priKey1 := identityset.PrivateKey(29)
-	ex1, err := action.SignedExecution(addr1, priKey1, uint64(1), big.NewInt(10), uint64(100000), big.NewInt(0), []byte{})
-	require.NoError(err)
-	act := &iotexapi.ActionInfo{
-		Index:   0,
-		ActHash: "_test",
-		Action:  ex1.Proto(),
-	}
-	core.EXPECT().Action(gomock.Any(), gomock.Any()).Return(act, nil)
-	core.EXPECT().EVMNetworkID().Return(uint32(11))
-	core.EXPECT().SimulateExecution(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, nil)
+	core.EXPECT().TraceTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, logger.NewStructLogger(nil), nil)
 	resp, err := grpcSvr.TraceTransactionStructLogs(context.Background(), &iotexapi.TraceTransactionStructLogsRequest{
 		ActionHash: "_actionHash",
 	})

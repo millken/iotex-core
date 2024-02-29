@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/iotexproject/go-pkgs/hash"
 	"github.com/iotexproject/iotex-address/address"
+
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/pkg/log"
 )
@@ -103,13 +104,18 @@ type (
 		CorrectTxLogIndex                       bool
 		RevertLog                               bool
 		TolerateLegacyAddress                   bool
-		ValidateRewardProtocol                  bool
 		CreateLegacyNonceAccount                bool
 		FixGasAndNonceUpdate                    bool
 		FixUnproductiveDelegates                bool
 		CorrectGasRefund                        bool
-		FixRewardErroCheckPosition              bool
-		EnableWeb3Rewarding                     bool
+		SkipSystemActionNonce                   bool
+		ValidateSystemAction                    bool
+		AllowCorrectChainIDOnly                 bool
+		AddContractStakingVotes                 bool
+		FixContractStakingWeightedVotes         bool
+		ExecutionSizeLimit32KB                  bool
+		UseZeroNonceForFreshAccount             bool
+		SharedGasWithDapp                       bool
 	}
 
 	// FeatureWithHeightCtx provides feature check functions.
@@ -239,13 +245,18 @@ func WithFeatureCtx(ctx context.Context) context.Context {
 			CorrectTxLogIndex:                       g.IsMidway(height),
 			RevertLog:                               g.IsMidway(height),
 			TolerateLegacyAddress:                   !g.IsNewfoundland(height),
-			ValidateRewardProtocol:                  g.IsNewfoundland(height),
 			CreateLegacyNonceAccount:                !g.IsOkhotsk(height),
 			FixGasAndNonceUpdate:                    g.IsOkhotsk(height),
 			FixUnproductiveDelegates:                g.IsOkhotsk(height),
 			CorrectGasRefund:                        g.IsOkhotsk(height),
-			FixRewardErroCheckPosition:              g.IsOkhotsk(height),
-			EnableWeb3Rewarding:                     g.IsToBeEnabled(height),
+			SkipSystemActionNonce:                   g.IsPalau(height),
+			ValidateSystemAction:                    g.IsQuebec(height),
+			AllowCorrectChainIDOnly:                 g.IsQuebec(height),
+			AddContractStakingVotes:                 g.IsQuebec(height),
+			FixContractStakingWeightedVotes:         g.IsRedsea(height),
+			ExecutionSizeLimit32KB:                  !g.IsSumatra(height),
+			UseZeroNonceForFreshAccount:             g.IsSumatra(height),
+			SharedGasWithDapp:                       g.IsToBeEnabled(height),
 		},
 	)
 }

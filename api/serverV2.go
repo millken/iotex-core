@@ -13,6 +13,7 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/iotexproject/iotex-core/action/protocol"
+	"github.com/iotexproject/iotex-core/action/protocol/execution/evm"
 	"github.com/iotexproject/iotex-core/actpool"
 	"github.com/iotexproject/iotex-core/blockchain"
 	"github.com/iotexproject/iotex-core/blockchain/block"
@@ -43,13 +44,14 @@ func NewServerV2(
 	bfIndexer blockindex.BloomFilterIndexer,
 	actPool actpool.ActPool,
 	registry *protocol.Registry,
+	getBlockTime evm.GetBlockTime,
 	opts ...Option,
 ) (*ServerV2, error) {
-	coreAPI, err := newCoreService(cfg, chain, bs, sf, dao, indexer, bfIndexer, actPool, registry, opts...)
+	coreAPI, err := newCoreService(cfg, chain, bs, sf, dao, indexer, bfIndexer, actPool, registry, getBlockTime, opts...)
 	if err != nil {
 		return nil, err
 	}
-	web3Handler := NewWeb3Handler(coreAPI, cfg.RedisCacheURL)
+	web3Handler := NewWeb3Handler(coreAPI, cfg.RedisCacheURL, cfg.BatchRequestLimit)
 
 	tp, err := tracer.NewProvider(
 		tracer.WithServiceName(cfg.Tracer.ServiceName),
@@ -100,7 +102,7 @@ func (svr *ServerV2) Start(ctx context.Context) error {
 // Stop stops the GRPC server and the CoreService
 func (svr *ServerV2) Stop(ctx context.Context) error {
 	if svr.tracer != nil {
-		if err := svr.tracer.Shutdown(context.Background()); err != nil {
+		if err := svr.tracer.Shutdown(ctx); err != nil {
 			return errors.Wrap(err, "failed to shutdown api tracer")
 		}
 	}

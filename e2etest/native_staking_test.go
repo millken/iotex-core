@@ -59,18 +59,18 @@ func TestNativeStaking(t *testing.T) {
 
 	testInitCands := []genesis.BootstrapCandidate{
 		{
-			identityset.Address(22).String(),
-			identityset.Address(23).String(),
-			identityset.Address(23).String(),
-			"test1",
-			selfStake.String(),
+			OwnerAddress:      identityset.Address(22).String(),
+			OperatorAddress:   identityset.Address(23).String(),
+			RewardAddress:     identityset.Address(23).String(),
+			Name:              "test1",
+			SelfStakingTokens: selfStake.String(),
 		},
 		{
-			identityset.Address(24).String(),
-			identityset.Address(25).String(),
-			identityset.Address(25).String(),
-			"test2",
-			selfStake.String(),
+			OwnerAddress:      identityset.Address(24).String(),
+			OperatorAddress:   identityset.Address(25).String(),
+			RewardAddress:     identityset.Address(25).String(),
+			Name:              "test2",
+			SelfStakingTokens: selfStake.String(),
 		},
 	}
 
@@ -102,7 +102,7 @@ func TestNativeStaking(t *testing.T) {
 		cand2PriKey := identityset.PrivateKey(1)
 
 		fixedTime := time.Unix(cfg.Genesis.Timestamp, 0)
-		addOneTx := func(tx action.SealedEnvelope, err error) (action.SealedEnvelope, error) {
+		addOneTx := func(tx *action.SealedEnvelope, err error) (*action.SealedEnvelope, error) {
 			if err != nil {
 				return tx, err
 			}
@@ -299,7 +299,7 @@ func TestNativeStaking(t *testing.T) {
 		require.Equal(hash.BytesToHash256(cand1Addr.Bytes()), logs[0].Topics[2])
 
 		unstakeTime := fixedTime.Add(time.Duration(1) * 24 * time.Hour)
-		addOneTx = func(tx action.SealedEnvelope, err error) (action.SealedEnvelope, error) {
+		addOneTx = func(tx *action.SealedEnvelope, err error) (*action.SealedEnvelope, error) {
 			if err != nil {
 				return tx, err
 			}
@@ -403,11 +403,14 @@ func TestNativeStaking(t *testing.T) {
 	require.NoError(err)
 	testSystemLogPath, err := testutil.PathOfTempFile("systemlog")
 	require.NoError(err)
+	testSGDIndexPath, err := testutil.PathOfTempFile("sgdindex")
+	require.NoError(err)
 	defer func() {
 		testutil.CleanupPath(testTriePath)
 		testutil.CleanupPath(testDBPath)
 		testutil.CleanupPath(testIndexPath)
 		testutil.CleanupPath(testSystemLogPath)
+		testutil.CleanupPath(testSGDIndexPath)
 		// clear the gateway
 		delete(cfg.Plugins, config.GatewayPlugin)
 	}()
@@ -417,6 +420,8 @@ func TestNativeStaking(t *testing.T) {
 	cfg.Chain.TrieDBPath = testTriePath
 	cfg.Chain.ChainDBPath = testDBPath
 	cfg.Chain.IndexDBPath = testIndexPath
+	cfg.Chain.ContractStakingIndexDBPath = testIndexPath
+	cfg.Chain.SGDIndexDBPath = testSGDIndexPath
 	cfg.System.SystemLogDBPath = testSystemLogPath
 	cfg.Consensus.Scheme = config.NOOPScheme
 	cfg.Chain.EnableAsyncIndexWrite = false
@@ -458,7 +463,7 @@ func checkCandidateState(
 func checkAccountState(
 	cfg config.Config,
 	sr protocol.StateReader,
-	act action.SealedEnvelope,
+	act *action.SealedEnvelope,
 	registrationFee bool,
 	expectedBalance *big.Int,
 	accountAddr address.Address,

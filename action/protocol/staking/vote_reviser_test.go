@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iotexproject/iotex-address/address"
+
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/pkg/unit"
@@ -120,6 +121,7 @@ func TestVoteReviser(t *testing.T) {
 			PersistStakingPatchBlock: math.MaxUint64,
 		},
 		nil,
+		nil,
 		genesis.Default.OkhotskBlockHeight,
 		genesis.Default.HawaiiBlockHeight,
 		genesis.Default.GreenlandBlockHeight,
@@ -196,10 +198,10 @@ func TestVoteReviser(t *testing.T) {
 			if address.Equal(v.cand, c.Owner) && v.index != c.SelfStakeBucketIdx {
 				bucket, err := csr.getBucket(v.index)
 				r.NoError(err)
-				total := calculateVoteWeight(cv, bucket, false)
+				total := CalculateVoteWeight(cv, bucket, false)
 				bucket, err = csr.getBucket(c.SelfStakeBucketIdx)
 				r.NoError(err)
-				total.Add(total, calculateVoteWeight(cv, bucket, true))
+				total.Add(total, CalculateVoteWeight(cv, bucket, true))
 				r.Equal(0, total.Cmp(c.Votes))
 				break
 			}

@@ -11,12 +11,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
@@ -59,6 +57,7 @@ const (
 var (
 	// _depositToStakeMethod is the interface of the abi encoding of stake action
 	_depositToStakeMethod abi.Method
+	_                     EthCompatibleAction = (*DepositToStake)(nil)
 )
 
 // DepositToStake defines the action of stake add deposit
@@ -221,15 +220,17 @@ func NewDepositToStakeFromABIBinary(data []byte) (*DepositToStake, error) {
 }
 
 // ToEthTx converts action to eth-compatible tx
-func (ds *DepositToStake) ToEthTx() (*types.Transaction, error) {
-	addr, err := address.FromString(address.StakingProtocolAddr)
-	if err != nil {
-		return nil, err
-	}
-	ethAddr := common.BytesToAddress(addr.Bytes())
+func (ds *DepositToStake) ToEthTx(_ uint32) (*types.Transaction, error) {
 	data, err := ds.encodeABIBinary()
 	if err != nil {
 		return nil, err
 	}
-	return types.NewTransaction(ds.Nonce(), ethAddr, big.NewInt(0), ds.GasLimit(), ds.GasPrice(), data), nil
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    ds.Nonce(),
+		GasPrice: ds.GasPrice(),
+		Gas:      ds.GasLimit(),
+		To:       &_stakingProtocolEthAddr,
+		Value:    big.NewInt(0),
+		Data:     data,
+	}), nil
 }

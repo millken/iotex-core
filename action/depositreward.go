@@ -11,12 +11,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/pkg/util/byteutil"
 	"github.com/iotexproject/iotex-proto/golang/iotextypes"
 )
@@ -49,6 +47,7 @@ var (
 	DepositToRewardingFundGasPerByte = uint64(100)
 
 	_depositRewardMethod abi.Method
+	_                    EthCompatibleAction = (*DepositToRewardingFund)(nil)
 )
 
 func init() {
@@ -160,17 +159,19 @@ func (d *DepositToRewardingFund) encodeABIBinary() ([]byte, error) {
 }
 
 // ToEthTx converts action to eth-compatible tx
-func (d *DepositToRewardingFund) ToEthTx() (*types.Transaction, error) {
-	addr, err := address.FromString(address.RewardingProtocol)
-	if err != nil {
-		return nil, err
-	}
-	ethAddr := common.BytesToAddress(addr.Bytes())
+func (d *DepositToRewardingFund) ToEthTx(_ uint32) (*types.Transaction, error) {
 	data, err := d.encodeABIBinary()
 	if err != nil {
 		return nil, err
 	}
-	return types.NewTransaction(d.Nonce(), ethAddr, big.NewInt(0), d.GasLimit(), d.GasPrice(), data), nil
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    d.Nonce(),
+		GasPrice: d.GasPrice(),
+		Gas:      d.GasLimit(),
+		To:       &_rewardingProtocolEthAddr,
+		Value:    big.NewInt(0),
+		Data:     data,
+	}), nil
 }
 
 // NewDepositToRewardingFundFromABIBinary decodes data into action
