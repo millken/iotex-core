@@ -26,6 +26,7 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
+	"github.com/iotexproject/iotex-core/state/bstore"
 )
 
 var (
@@ -291,7 +292,23 @@ func (ws *workingSet) PutState(s interface{}, opts ...protocol.StateOption) (uin
 	if err != nil {
 		return ws.height, errors.Wrapf(err, "failed to convert account %v to bytes", s)
 	}
-	return ws.height, ws.store.Put(cfg.Namespace, cfg.Key, ss)
+	if err = ws.store.Put(cfg.Namespace, cfg.Key, ss); err == nil {
+		if cfg.Namespace == AccountKVNamespace {
+			addr, err := address.FromBytes(cfg.Key)
+			if err != nil {
+				return ws.height, err
+			}
+			acc := &state.Account{}
+			if err := state.Deserialize(acc, ss); err != nil {
+				return ws.height, err
+			}
+
+			if err := bstore.StoreAccountBalance(ws.height, addr, acc.Balance); err != nil {
+				return ws.height, err
+			}
+		}
+	}
+	return ws.height, err
 }
 
 // DelState deletes a state from DB

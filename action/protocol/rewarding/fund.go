@@ -20,6 +20,7 @@ import (
 	accountutil "github.com/iotexproject/iotex-core/action/protocol/account/util"
 	"github.com/iotexproject/iotex-core/action/protocol/rewarding/rewardingpb"
 	"github.com/iotexproject/iotex-core/state"
+	"github.com/iotexproject/iotex-core/state/bstore"
 )
 
 // fund stores the balance of the rewarding fund. The difference between total and available balance should be
@@ -109,6 +110,11 @@ func (p *Protocol) deposit(
 		}
 	}
 	if err := p.putState(ctx, sm, _fundKey, &f); err != nil {
+		return nil, err
+	}
+	addr, _ := address.FromString(address.RewardingPoolAddr)
+	height, _ := sm.Height()
+	if err := bstore.StoreAccountBalance(height, addr, f.totalBalance); err != nil {
 		return nil, err
 	}
 	return &action.TransactionLog{

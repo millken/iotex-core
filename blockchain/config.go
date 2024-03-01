@@ -27,6 +27,7 @@ type (
 		ChainDBPath                string           `yaml:"chainDBPath"`
 		TrieDBPatchFile            string           `yaml:"trieDBPatchFile"`
 		TrieDBPath                 string           `yaml:"trieDBPath"`
+		AccountHistoryDBPath       string           `yaml:"accountHistoryDBPath"`
 		StakingPatchDir            string           `yaml:"stakingPatchDir"`
 		IndexDBPath                string           `yaml:"indexDBPath"`
 		BloomfilterIndexDBPath     string           `yaml:"bloomfilterIndexDBPath"`
@@ -80,6 +81,7 @@ var (
 		ChainDBPath:                "/var/data/chain.db",
 		TrieDBPatchFile:            "/var/data/trie.db.patch",
 		TrieDBPath:                 "/var/data/trie.db",
+		AccountHistoryDBPath:       "/var/data/accounthistory.db",
 		StakingPatchDir:            "/var/data",
 		IndexDBPath:                "/var/data/index.db",
 		BloomfilterIndexDBPath:     "/var/data/bloomfilter.index.db",

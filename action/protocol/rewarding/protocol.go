@@ -109,8 +109,8 @@ func (p *Protocol) CreatePreStates(ctx context.Context, sm protocol.StateManager
 		return p.SetReward(ctx, sm, g.DardanellesBlockReward(), true)
 	case g.GreenlandBlockHeight:
 		return p.migrateValueGreenland(ctx, sm)
-	case g.KamchatkaBlockHeight:
-		return p.setFoundationBonusExtension(ctx, sm)
+		// case g.KamchatkaBlockHeight:
+		// 	return p.setFoundationBonusExtension(ctx, sm)
 	}
 	return nil
 }

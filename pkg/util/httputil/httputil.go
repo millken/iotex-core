@@ -39,6 +39,27 @@ func ReadHeaderTimeout(h time.Duration) ServerOption {
 	}
 }
 
+// ReadTimeout sets read timeout
+func ReadTimeout(h time.Duration) ServerOption {
+	return func(cfg *serverConfig) {
+		cfg.ReadTimeout = h
+	}
+}
+
+// WriteTimeout sets write timeout
+func WriteTimeout(h time.Duration) ServerOption {
+	return func(cfg *serverConfig) {
+		cfg.WriteTimeout = h
+	}
+}
+
+// IdleTimeout sets idle timeout
+func IdleTimeout(h time.Duration) ServerOption {
+	return func(cfg *serverConfig) {
+		cfg.IdleTimeout = h
+	}
+}
+
 // NewServer creates a HTTP server with time out settings.
 func NewServer(addr string, handler http.Handler, opts ...ServerOption) http.Server {
 	cfg := DefaultServerConfig

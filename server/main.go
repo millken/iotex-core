@@ -32,6 +32,7 @@ import (
 	"github.com/iotexproject/iotex-core/pkg/probe"
 	"github.com/iotexproject/iotex-core/pkg/recovery"
 	"github.com/iotexproject/iotex-core/server/itx"
+	"github.com/iotexproject/iotex-core/state/bstore"
 )
 
 /**
@@ -173,7 +174,22 @@ func main() {
 			log.L().Fatal("Failed to new sub chain.", zap.Error(err))
 		}
 	}
-
+	// if err = bstore.OpenDB(ctx, cfg.Chain.AccountHistoryDBPath); err != nil {
+	// 	log.L().Fatal("Failed to Open account history database.", zap.Error(err))
+	// }
+	if &cfg.Database != nil {
+		if _, err := bstore.Open(&cfg.Database); err != nil {
+			log.L().Fatal("Failed to connect to database.", zap.Error(err))
+		}
+	}
+	defer func() {
+		// if err = bstore.CloseDB(); err != nil {
+		// 	log.L().Error("Failed to close account history database.", zap.Error(err))
+		// }
+		if err = bstore.Close(); err != nil {
+			log.L().Error("Failed to close database.", zap.Error(err))
+		}
+	}()
 	itx.StartServer(ctx, svr, probeSvr, cfg)
 	close(stopped)
 	<-livenessCtx.Done()
