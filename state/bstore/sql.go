@@ -59,8 +59,6 @@ CREATE TABLE accounts_40000000_45000000 PARTITION OF accounts FOR VALUES FROM (4
 CREATE TABLE accounts_45000000_50000000 PARTITION OF accounts FOR VALUES FROM (45000000) TO (50000000);
 
 CREATE INDEX "idx_accounts_block_height" ON accounts("block_height");
-
-ALTER TABLE "public"."accounts" ADD CONSTRAINT "account_balance_pkey" PRIMARY KEY ("id");
 */
 func sqlStoreAccount(height uint64, accounts map[string]*big.Int) error {
 	if !dbOpened || len(accounts) == 0 {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/iotexproject/iotex-address/address"
 	"github.com/iotexproject/iotex-core/db"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -42,7 +43,7 @@ func CloseDB() error {
 func StoreAccountBalance(height uint64, addr address.Address, balance *big.Int) error {
 	if height != currentHeight {
 		if err := sqlStoreAccount(currentHeight, accountBalances); err != nil {
-			return err
+			return errors.Wrap(err, "failed to store account balance")
 		}
 		accountBalances = make(map[string]*big.Int)
 		currentHeight = height

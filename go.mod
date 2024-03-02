@@ -25,7 +25,7 @@ require (
 	github.com/iotexproject/iotex-election v0.3.5-0.20210611041425-20ddf674363d
 	github.com/iotexproject/iotex-proto v0.5.15-0.20240105060115-b12b162afdde
 	github.com/ipfs/go-ipfs-api v0.2.0
-	github.com/lib/pq v1.0.0
+	github.com/lib/pq v1.10.9
 	github.com/libp2p/go-libp2p-core v0.8.5
 	github.com/mackerelio/go-osstat v0.2.4
 	github.com/miguelmota/go-ethereum-hdwallet v0.1.1
