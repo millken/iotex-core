@@ -15,7 +15,7 @@ import (
 	"github.com/iotexproject/iotex-core/action/protocol"
 	"github.com/iotexproject/iotex-core/action/protocol/staking/stakingpb"
 	"github.com/iotexproject/iotex-core/state"
-	"github.com/iotexproject/iotex-core/state/bstore"
+	"github.com/iotexproject/iotex-core/state/balancehistory"
 )
 
 // const
@@ -139,7 +139,7 @@ func (bp *BucketPool) CreditPool(sm protocol.StateManager, amount *big.Int) erro
 	}
 	addr, _ := address.FromString(address.StakingBucketPoolAddr)
 	height, _ := sm.Height()
-	if err := bstore.StoreAccountBalance(height, addr, bp.Total()); err != nil {
+	if err := balancehistory.StoreAccountBalance(height, addr, bp.Total()); err != nil {
 		return err
 	}
 	if bp.enableSMStorage {
@@ -154,7 +154,7 @@ func (bp *BucketPool) DebitPool(sm protocol.StateManager, amount *big.Int, newBu
 	bp.total.AddBalance(amount, newBucket)
 	addr, _ := address.FromString(address.StakingBucketPoolAddr)
 	height, _ := sm.Height()
-	if err := bstore.StoreAccountBalance(height, addr, bp.Total()); err != nil {
+	if err := balancehistory.StoreAccountBalance(height, addr, bp.Total()); err != nil {
 		return err
 	}
 	if bp.enableSMStorage {

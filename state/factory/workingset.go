@@ -26,7 +26,7 @@ import (
 	"github.com/iotexproject/iotex-core/blockchain/genesis"
 	"github.com/iotexproject/iotex-core/pkg/log"
 	"github.com/iotexproject/iotex-core/state"
-	"github.com/iotexproject/iotex-core/state/bstore"
+	"github.com/iotexproject/iotex-core/state/balancehistory"
 )
 
 var (
@@ -303,7 +303,7 @@ func (ws *workingSet) PutState(s interface{}, opts ...protocol.StateOption) (uin
 				return ws.height, err
 			}
 
-			if err := bstore.StoreAccountBalance(ws.height, addr, acc.Balance); err != nil {
+			if err := balancehistory.StoreAccountBalance(ws.height, addr, acc.Balance); err != nil {
 				return ws.height, err
 			}
 		}

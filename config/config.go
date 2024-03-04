@@ -26,7 +26,7 @@ import (
 	"github.com/iotexproject/iotex-core/nodeinfo"
 	"github.com/iotexproject/iotex-core/p2p"
 	"github.com/iotexproject/iotex-core/pkg/log"
-	"github.com/iotexproject/iotex-core/state/bstore"
+	"github.com/iotexproject/iotex-core/state/balancehistory"
 )
 
 // IMPORTANT: to define a config, add a field or a new config type to the existing config types. In addition, provide
@@ -134,7 +134,7 @@ type (
 		SubLogs            map[string]log.GlobalConfig     `yaml:"subLogs"`
 		Genesis            genesis.Genesis                 `yaml:"genesis"`
 		NodeInfo           nodeinfo.Config                 `yaml:"nodeinfo"`
-		Database           bstore.Database                 `yaml:"database"`
+		Database           balancehistory.Database         `yaml:"database"`
 	}
 
 	// Validate is the interface of validating the config

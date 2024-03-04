@@ -1,4 +1,4 @@
-package bstore
+package balancehistory
 
 import (
 	"database/sql"
@@ -6,11 +6,17 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/iotexproject/iotex-address/address"
 	_ "github.com/lib/pq"
+	"github.com/pkg/errors"
 )
 
-var sdb *sql.DB
-var dbOpened bool
+var (
+	sdb             *sql.DB
+	dbOpened        bool
+	currentHeight   uint64
+	accountBalances = make(map[string]*big.Int)
+)
 
 type Database struct {
 	Host     string `yaml:"host"`
@@ -73,7 +79,19 @@ func sqlStoreAccount(height uint64, accounts map[string]*big.Int) error {
 		i++
 	}
 	stmt := fmt.Sprintf("INSERT INTO accounts (block_height, address, balance) VALUES %s", strings.Join(valueStrings, ","))
-	fmt.Println(stmt)
 	_, err := sdb.Exec(stmt, valueArgs...)
 	return err
+}
+
+func StoreAccountBalance(height uint64, addr address.Address, balance *big.Int) error {
+	if height != currentHeight {
+		if err := sqlStoreAccount(currentHeight, accountBalances); err != nil {
+			return errors.Wrap(err, "failed to store account balance")
+		}
+		accountBalances = make(map[string]*big.Int)
+		currentHeight = height
+	}
+
+	accountBalances[addr.String()] = balance
+	return nil
 }
