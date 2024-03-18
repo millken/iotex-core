@@ -94,9 +94,10 @@ func (st Account) Serialize() ([]byte, error) {
 // FromProto converts from protobuf's Account
 func (st *Account) FromProto(acPb *accountpb.Account) {
 	st.nonce = acPb.Nonce
-	if _, ok := accountpb.AccountType_name[int32(acPb.Type.Number())]; !ok {
-		panic("unknown account type" + acPb.Type.String())
-	}
+	//todo check if account type is valid
+	// if _, ok := accountpb.AccountType_name[int32(acPb.Type.Number())]; !ok {
+	// 	panic("unknown account type")
+	// }
 	st.accountType = int32(acPb.Type.Number())
 	if acPb.Balance == "" {
 		st.Balance = big.NewInt(0)
