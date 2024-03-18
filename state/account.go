@@ -95,7 +95,7 @@ func (st Account) Serialize() ([]byte, error) {
 func (st *Account) FromProto(acPb *accountpb.Account) {
 	st.nonce = acPb.Nonce
 	if _, ok := accountpb.AccountType_name[int32(acPb.Type.Number())]; !ok {
-		panic("unknown account type")
+		panic("unknown account type" + acPb.Type.String())
 	}
 	st.accountType = int32(acPb.Type.Number())
 	if acPb.Balance == "" {
