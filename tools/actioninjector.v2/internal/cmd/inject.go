@@ -137,7 +137,7 @@ func newInjectionProcessor() (*injectProcessor, error) {
 func (p *injectProcessor) randAccounts(num int) error {
 	log.L().Info("generate random accounts", zap.Int("num", num))
 	addrKeys := make([]*util.AddressKey, 0, num)
-	for i := 200; i < num+200; i++ {
+	for i := 0; i < num; i++ {
 		s := hash.Hash256b([]byte{byte(i), byte(100)})
 		private, err := crypto.BytesToPrivateKey(s[:])
 		if err != nil {
