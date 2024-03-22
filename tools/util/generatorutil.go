@@ -8,6 +8,7 @@ package util
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -130,7 +131,7 @@ func ActionGenerator(
 	var (
 		selp      action.SealedEnvelope
 		err       error
-		delegates []*AddressKey
+		delegates = make([]*AddressKey, 0)
 	)
 	for _, addr := range accountManager.AccountList {
 		pm, ok := accountManager.NonceProcessingLoad(addr.EncodedAddr)
@@ -138,7 +139,12 @@ func ActionGenerator(
 			if !pm.Processing {
 				delegates = append(delegates, addr)
 			}
+		} else {
+			delegates = append(delegates, addr)
 		}
+	}
+	if len(delegates) == 0 {
+		return selp, errors.New("no delegates")
 	}
 	var (
 		randNum   = rand.Intn(len(delegates))
