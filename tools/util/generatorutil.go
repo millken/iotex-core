@@ -105,6 +105,9 @@ func (ac *AccountManager) UpdateNonce(client iotexapi.APIServiceClient) error {
 
 func (ac *AccountManager) NonceProcessingLoad(sender string) (FeedT, bool) {
 	ft, ok := ac.nonceProcessingMap.Load(sender)
+	if !ok {
+		return FeedT{}, false
+	}
 	return ft.(FeedT), ok
 }
 
