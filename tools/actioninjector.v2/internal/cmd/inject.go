@@ -392,31 +392,26 @@ func (p *injectProcessor) Injection(ctx context.Context, ch chan WrapSealedEnvel
 }
 
 var (
-	_injectedActs       uint64 = 0
-	_injectedErrActs    uint64 = 0
-	_injectedActHashes         = []hash.Hash256{}
-	_nonceProcessingMap        = sync.Map{}
+	_injectedActs      uint64 = 0
+	_injectedErrActs   uint64 = 0
+	_injectedActHashes        = []hash.Hash256{}
 )
 
 func (p *injectProcessor) processFeedback(feed feedback) {
-	type feedT struct {
-		processing bool
-		time       int64
-	}
-	pm, ok := _nonceProcessingMap.Load(feed.sender)
+	pm, ok := p.accountManager.NonceProcessingLoad(feed.sender)
 	if ok {
-		if pm.(feedT).processing || pm.(feedT).time > feed.time {
-			log.L().Info("feedback ingored", zap.String("sender", feed.sender), zap.String("time", time.Unix(pm.(feedT).time, 0).Local().String()))
+		if pm.Processing || pm.Time > feed.time {
+			log.L().Info("feedback ingored", zap.String("sender", feed.sender), zap.String("time", time.Unix(pm.Time, 0).Local().String()))
 			return
 		}
 	}
-	if strings.Contains(feed.err.Error(), action.ErrExistedInPool.Error()) ||
-		strings.Contains(feed.err.Error(), action.ErrReplaceUnderpriced.Error()) {
-		return
-	}
-	_nonceProcessingMap.Store(feed.sender, feedT{
-		processing: true,
-		time:       time.Now().UnixNano(),
+	// if strings.Contains(feed.err.Error(), action.ErrExistedInPool.Error()) ||
+	// 	strings.Contains(feed.err.Error(), action.ErrReplaceUnderpriced.Error()) {
+	// 	return
+	// }
+	p.accountManager.NonceProcessingStore(feed.sender, util.FeedT{
+		Processing: true,
+		Time:       time.Now().UnixNano(),
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -426,9 +421,9 @@ func (p *injectProcessor) processFeedback(feed feedback) {
 	} else {
 		lastNonceTimes.Store(feed.sender, time.Now().UnixNano())
 	}
-	_nonceProcessingMap.Store(feed.sender, feedT{
-		processing: false,
-		time:       time.Now().UnixNano(),
+	p.accountManager.NonceProcessingStore(feed.sender, util.FeedT{
+		Processing: false,
+		Time:       time.Now().UnixNano(),
 	})
 }
 

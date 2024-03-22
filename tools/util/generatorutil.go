@@ -26,8 +26,14 @@ type nounceManager struct {
 
 // AccountManager is tbd
 type AccountManager struct {
-	AccountList []*AddressKey
-	nonceMng    nounceManager
+	AccountList        []*AddressKey
+	nonceMng           nounceManager
+	nonceProcessingMap sync.Map
+}
+
+type FeedT struct {
+	Processing bool
+	Time       int64
 }
 
 // NewAccountManager is tbd
@@ -37,6 +43,7 @@ func NewAccountManager(accounts []*AddressKey) *AccountManager {
 		nonceMng: nounceManager{
 			pendingNonce: make(map[string]uint64),
 		},
+		nonceProcessingMap: sync.Map{},
 	}
 }
 
@@ -96,6 +103,15 @@ func (ac *AccountManager) UpdateNonce(client iotexapi.APIServiceClient) error {
 	return nil
 }
 
+func (ac *AccountManager) NonceProcessingLoad(sender string) (FeedT, bool) {
+	ft, ok := ac.nonceProcessingMap.Load(sender)
+	return ft.(FeedT), ok
+}
+
+func (ac *AccountManager) NonceProcessingStore(sender string, ft FeedT) {
+	ac.nonceProcessingMap.Store(sender, ft)
+}
+
 // ActionGenerator is tbd
 func ActionGenerator(
 	actionType int,
@@ -111,7 +127,17 @@ func ActionGenerator(
 	var (
 		selp      action.SealedEnvelope
 		err       error
-		delegates = accountManager.AccountList
+		delegates []*AddressKey
+	)
+	for _, addr := range accountManager.AccountList {
+		pm, ok := accountManager.NonceProcessingLoad(addr.EncodedAddr)
+		if ok {
+			if !pm.Processing {
+				delegates = append(delegates, addr)
+			}
+		}
+	}
+	var (
 		randNum   = rand.Intn(len(delegates))
 		sender    = delegates[randNum]
 		recipient = delegates[(randNum+1)%len(delegates)]
