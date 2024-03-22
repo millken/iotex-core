@@ -436,6 +436,13 @@ func (p *injectProcessor) inject(wrapSelp WrapSealedEnvelope) {
 			return
 		}
 	}
+	//if sender is resetting nonce, ignore this action
+	pm, ok := p.accountManager.NonceProcessingLoad(sender)
+	if ok {
+		if pm.Processing {
+			return
+		}
+	}
 	conn, err := p.pool.Get()
 	if err != nil {
 		log.L().Error("Failed to get connection.", zap.Error(err))
