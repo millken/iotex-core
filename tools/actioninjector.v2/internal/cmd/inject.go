@@ -135,9 +135,9 @@ func newInjectionProcessor() (*injectProcessor, error) {
 }
 
 func (p *injectProcessor) randAccounts(num int) error {
-	log.L().Info("generate random accounts", zap.Int("num", num))
+	log.L().Info("generate random accounts", zap.Int("num", num), zap.Int("start", rawInjectCfg.accountStart))
 	addrKeys := make([]*util.AddressKey, 0, num)
-	for i := 0; i < num; i++ {
+	for i := rawInjectCfg.accountStart; i < num+rawInjectCfg.accountStart; i++ {
 		s := hash.Hash256b([]byte{byte(i), byte(100)})
 		private, err := crypto.BytesToPrivateKey(s[:])
 		if err != nil {
@@ -544,6 +544,7 @@ var rawInjectCfg = struct {
 	chainID       uint32
 
 	randAccounts    int
+	accountStart    int
 	loadTokenAmount string
 }{}
 
@@ -571,6 +572,7 @@ func init() {
 	flag.DurationVar(&rawInjectCfg.resetInterval, "reset-interval", 10*time.Second, "time interval to reset nonce counter")
 	flag.IntVar(&rawInjectCfg.aps, "aps", 200, "actions to be injected per second")
 	flag.IntVar(&rawInjectCfg.randAccounts, "rand-accounts", 20, "number of accounst to use")
+	flag.IntVar(&rawInjectCfg.accountStart, "account-start", 0, "account start index")
 	flag.BoolVar(&rawInjectCfg.insecure, "insecure", false, "insecure network")
 	flag.BoolVar(&rawInjectCfg.checkReceipt, "check-recipt", false, "check recept")
 	flag.StringVar(&rawInjectCfg.loadTokenAmount, "load-token-amount", "5000000000000000000", "init load how much token to inject accounts")
