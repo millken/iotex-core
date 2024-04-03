@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 
 	"github.com/cenkalti/backoff"
 	"github.com/iotexproject/iotex-core/action"
@@ -117,8 +116,6 @@ func (ac *AccountManager) NonceProcessingStore(sender string, ft FeedT) {
 	ac.nonceProcessingMap.Store(sender, ft)
 }
 
-var currentDelegateIndex int32
-
 // ActionGenerator is tbd
 func ActionGenerator(
 	actionType int,
@@ -150,7 +147,7 @@ func ActionGenerator(
 		return selp, errors.New("no delegates")
 	}
 	var (
-		randNum   = int(atomic.LoadInt32(&currentDelegateIndex))
+		randNum   = rand.Intn(len(delegates))
 		sender    = delegates[randNum]
 		recipient = delegates[(randNum+1)%len(delegates)]
 		nonce     = accountManager.GetAndInc(sender.EncodedAddr)
@@ -167,6 +164,5 @@ func ActionGenerator(
 			selp, _, err = createSignedExecution(sender, contractAddr, chainID, nonce, big.NewInt(0), executionGasLimit, executionGasPrice, executionPayload)
 		}
 	}
-	atomic.StoreInt32(&currentDelegateIndex, int32((randNum+1)%len(delegates)))
 	return selp, err
 }
